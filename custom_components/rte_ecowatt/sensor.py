@@ -168,7 +168,7 @@ class AbstractEcowattLevel(CoordinatorEntity, Entity):
     ):
         super().__init__(coordinator)
         self.hass = hass
-        self.attrs: Dict[str, Any] = {}
+        self._attr_extra_state_attributes: Dict[str, Any] = {}
         _LOGGER.info(f"Creating an ecowatt sensor, named {self.name}")
         self._state = None
         self.shift = shift
@@ -186,10 +186,10 @@ class AbstractEcowattLevel(CoordinatorEntity, Entity):
             _LOGGER.debug("Last coordinator failed, assuming state has not changed")
             return
         ecowatt_level = self._find_ecowatt_level()
-        previous_level = self.attrs.get(ATTR_LEVEL_CODE, None)
-        self.attrs[ATTR_LEVEL_CODE] = ecowatt_level
+        previous_level = self._attr_extra_state_attributes.get(ATTR_LEVEL_CODE, None)
+        self._attr_extra_state_attributes[ATTR_LEVEL_CODE] = ecowatt_level
         self._state = self._level2string(ecowatt_level)
-        if previous_level != self.attrs[ATTR_LEVEL_CODE]:
+        if previous_level != self._attr_extra_state_attributes[ATTR_LEVEL_CODE]:
             _LOGGER.info(f"updated '{self.name}' with level {self._state}")
         self.async_write_ha_state()
 
@@ -205,10 +205,6 @@ class AbstractEcowattLevel(CoordinatorEntity, Entity):
     def state(self) -> Optional[str]:
         return self._state
 
-    @property
-    def device_state_attributes(self) -> Dict[str, Any]:
-        return self.attrs
-
     def _day_string(self, day_shift):
         if day_shift == 0:
             return "today"
@@ -223,6 +219,8 @@ class HourlyEcowattLevel(AbstractEcowattLevel):
         days = shift // 24
         hours = shift % 24
         self._attr_name = f"Ecowatt level {self._day_string(days)} and {hours} hours"
+        if shift == 0:
+            self._attr_name = "Ecowatt level now"
         super().__init__(coordinator, shift=shift, hass=hass)
 
     @property
