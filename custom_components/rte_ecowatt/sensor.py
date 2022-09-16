@@ -3,6 +3,7 @@ from datetime import timedelta, date, datetime
 from typing import Any, Callable, Dict, Optional
 import logging
 import json
+import os
 
 from oauthlib.oauth2 import BackendApplicationClient
 from async_oauthlib import OAuth2Session
@@ -19,13 +20,14 @@ from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
     UpdateFailed,
 )
+from homeassistant.config_entries import ConfigEntry
 
 from .const import (
     CONF_CLIENT_ID,
     CONF_CLIENT_SECRET,
     TOKEN_URL,
     BASE_URL,
-    ATTR_LEVEL_STRING
+    ATTR_LEVEL_CODE
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -38,6 +40,8 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
         }
 )
 
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
+    _LOGGER.info("Called async setup entry" )
 
 async def async_setup_platform(
         hass: HomeAssistant,
@@ -51,7 +55,10 @@ async def async_setup_platform(
     coordinator = EcoWattAPICoordinator(hass, config)
     async_add_entities(EcowattLevel(coordinator, i) for i in range(4))
     # force a first refresh immediately to avoid waiting for 16 minutes
+    coordinator.schedule_interval = timedelta(minutes=16)
     await coordinator.async_config_entry_first_refresh()
+    # trigger refresh *after* instanciating sensors that subscribe to it
+    await coordinator.async_refresh()
     _LOGGER.info("We finished the setup of ecowatt platform")
 
 class EcoWattAPICoordinator(DataUpdateCoordinator):
@@ -61,10 +68,7 @@ class EcoWattAPICoordinator(DataUpdateCoordinator):
         super().__init__(
             hass,
             _LOGGER,
-            # Name of the data. For logging purposes.
-            name="ecowatt api",
-            # Polling interval. Will only be polled if there are subscribers.
-            update_interval=timedelta(minutes=16),
+            name="ecowatt api", # for logging purpose
             update_method=self.update_method
         )
         self.config = config
@@ -85,33 +89,31 @@ class EcoWattAPICoordinator(DataUpdateCoordinator):
         so entities can quickly look up their data.
         """
         try:
-            _LOGGER.info("Starting collecting data")
+            _LOGGER.debug("Starting collecting data")
             client = await self.async_oauth_client()
             headers = {
                 'Authorization': f"{self.token['token_type']} {self.token['access_token']}"
             }
-            headers = {
-                'Authorization': f"{self.token['token_type']} {self.token['access_token']}"
-            }
             url = f"{BASE_URL}/open_api/ecowatt/v4/signals"
-            import os
             if 'ECOWATT_DEBUG' in os.environ:
                 url = f"{BASE_URL}/open_api/ecowatt/v4/sandbox/signals"
             api_result = await client.get(url, headers=headers)
-            await client.close()
             _LOGGER.info(f"data received, status code: {api_result.status}")
-            if api_result.status != 200:
-                # a code 429 is expected when doing development and not using the sandbox url
-                _LOGGER.info("Error while communicating with the api")
-                raise UpdateFailed(f"Error communicating with API: status code was {api_result.status}")
+            if api_result.status == 429:
+                # a code 429 is expected when requesting more often than every 15minutes and not using the sandbox url
+                # FIXME(kamaradclimber): avoid this error when home assistant is restarting by storing state and last update
+                raise UpdateFailed(f"Error communicating with RTE API: requests too frequent to RTE API")
+            elif api_result.status != 200:
+                raise UpdateFailed(f"Error communicating with RTE API: status code was {api_result.status}")
             body = await api_result.text()
-            _LOGGER.info(f"body: {body}")
+            await client.close() # we won't need the client anymore
+            _LOGGER.debug(f"api response body: {body}")
             signals = json.loads(body)['signals']
             for day_data in signals:
                 parsed_date = datetime.strptime(day_data['jour'], "%Y-%m-%dT%H:%M:%S%z").date()
                 day_data['date'] = parsed_date
 
-            _LOGGER.info(f"data parsed: {signals}")
+            _LOGGER.debug(f"data parsed: {signals}")
             return signals
         except Exception as err:
             raise UpdateFailed(f"Error communicating with API: {err}")
@@ -138,19 +140,18 @@ class EcowattLevel(CoordinatorEntity, Entity):
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        _LOGGER.info("checkpoint1")
+        if not self.coordinator.last_update_success:
+            _LOGGER.debug("Last coordinator failed, assuming state has not changed")
+            return
         today = date.today()
-        import os
         if 'ECOWATT_DEBUG' in os.environ:
-            today = date(2022, 6, 6) # never commit this!
+            today = date(2022, 6, 3)
         relevant_date = today + timedelta(days=self.days_in_advance)
-        _LOGGER.info(f"{self._name} {relevant_date}")
-        _LOGGER.info("checkpoint2")
+        # FIXME(kamaradclimber): we should deal properly when not finding date of interest
         ecowatt_data = next(filter(lambda e: e['date'] == relevant_date, self.coordinator.data))
-        _LOGGER.info(f"{self._name} {ecowatt_data}")
-        self._state = ecowatt_data['dvalue']
-        _LOGGER.info("checkpoint3")
-        self.attrs[ATTR_LEVEL_STRING] = ecowatt_data['message']
+        self._state = ecowatt_data['message']
+        self.attrs[ATTR_LEVEL_CODE] = ecowatt_data['dvalue']
+        _LOGGER.info(f"updated {self._name} with level {self._state}")
         self.async_write_ha_state()
 
     @property
