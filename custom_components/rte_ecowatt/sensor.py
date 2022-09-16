@@ -173,6 +173,7 @@ class AbstractEcowattLevel(CoordinatorEntity, Entity):
         _LOGGER.info(f"Creating an ecowatt sensor, named {self.name}")
         self._state = None
         self.shift = shift
+        self.happening_now = False
 
     def _timezone(self):
         timezone = self.hass.config.as_dict()["time_zone"]
@@ -196,10 +197,11 @@ class AbstractEcowattLevel(CoordinatorEntity, Entity):
         self.async_write_ha_state()
 
     def _level2string(self, level):
+        if self.happening_now and level == 3:
+            return "Coupure d'électricité en cours"
         return {
             1: "Situation normale",
             2: "Risques de coupures d'électricité",
-            # FIXME(kamaradclimber): if happening right now, it should be "Coupure d'électricité en cours"
             3: "Coupures d'électricité programmées",
         }[level]
 
@@ -231,6 +233,8 @@ class HourlyEcowattLevel(AbstractEcowattLevel):
         if shift == 0:
             self._attr_name = "Ecowatt level now"
         super().__init__(coordinator, shift=shift, hass=hass)
+        if shift == 0: # this needs to happen after initialization of super
+            self.happening_now = True
 
     @property
     def unique_id(self) -> str:
