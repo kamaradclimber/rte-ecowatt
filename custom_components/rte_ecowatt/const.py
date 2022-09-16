@@ -10,3 +10,5 @@ TOKEN_URL = f"{BASE_URL}/token/oauth/"
 
 ATTR_LEVEL_CODE = "level_code"
 ATTR_GENERATION_TIME = "generation_time"
+ATTR_PERIOD_START = "period_start"
+ATTR_PERIOD_END = "period_end"

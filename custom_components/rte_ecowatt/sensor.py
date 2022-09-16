@@ -33,6 +33,8 @@ from .const import (
     CONF_SENSOR_SHIFT,
     CONF_SENSORS,
     ATTR_GENERATION_TIME,
+    ATTR_PERIOD_START,
+    ATTR_PERIOD_END,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -233,7 +235,7 @@ class HourlyEcowattLevel(AbstractEcowattLevel):
         if shift == 0:
             self._attr_name = "Ecowatt level now"
         super().__init__(coordinator, shift=shift, hass=hass)
-        if shift == 0: # this needs to happen after initialization of super
+        if shift == 0:  # this needs to happen after initialization of super
             self.happening_now = True
 
     @property
@@ -258,6 +260,16 @@ class HourlyEcowattLevel(AbstractEcowattLevel):
             self._attr_extra_state_attributes[ATTR_GENERATION_TIME] = ecowatt_data[
                 "GenerationFichier"
             ]
+            self._attr_extra_state_attributes[
+                ATTR_PERIOD_START
+            ] = relevant_date - timedelta(
+                minutes=relevant_date.minute, seconds=relevant_date.second
+            )
+            self._attr_extra_state_attributes[
+                ATTR_PERIOD_END
+            ] = self._attr_extra_state_attributes[ATTR_PERIOD_START] + timedelta(
+                hours=1
+            )
             level = next(
                 filter(lambda e: e["pas"] == relevant_date.hour, ecowatt_data["values"])
             )
@@ -279,17 +291,31 @@ class DailyEcowattLevel(AbstractEcowattLevel):
         return f"ecowatt-level-in-{self.shift}-days"
 
     def _find_ecowatt_level(self) -> int:
-        today = datetime.now(self._timezone()).date()
+        now = datetime.now(self._timezone())
         if "ECOWATT_DEBUG" in os.environ:
-            today = date(2022, 6, 3)
-        relevant_date = today + timedelta(days=self.shift)
+            now = datetime(2022, 6, 3, 8, 0, 0, tzinfo=self._timezone())
+        relevant_date = now + timedelta(days=self.shift)
         try:
             ecowatt_data = next(
-                filter(lambda e: e["date"] == relevant_date, self.coordinator.data)
+                filter(
+                    lambda e: e["date"] == relevant_date.date(), self.coordinator.data
+                )
             )
             self._attr_extra_state_attributes[ATTR_GENERATION_TIME] = ecowatt_data[
                 "GenerationFichier"
             ]
+            self._attr_extra_state_attributes[
+                ATTR_PERIOD_START
+            ] = relevant_date - timedelta(
+                hours=relevant_date.hour,
+                minutes=relevant_date.minute,
+                seconds=relevant_date.second,
+            )
+            self._attr_extra_state_attributes[
+                ATTR_PERIOD_END
+            ] = self._attr_extra_state_attributes[ATTR_PERIOD_START] + timedelta(days=1)
             return ecowatt_data["dvalue"]
         except StopIteration:
-            raise RuntimeError(f"Unable to find ecowatt level for {relevant_date}")
+            raise RuntimeError(
+                f"Unable to find ecowatt level for {relevant_date.date()}"
+            )
