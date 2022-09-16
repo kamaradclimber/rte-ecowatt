@@ -65,6 +65,8 @@ async def async_setup_platform(
     timezone = hass.config.as_dict()['time_zone']
 
     sensors = []
+    sensors.append(DailyEcowattLevel(coordinator, 0, timezone))
+    sensors.append(HourlyEcowattLevel(coordinator, 0, timezone))
     for sensor_config in config[CONF_SENSORS]:
         if sensor_config[CONF_SENSOR_UNIT] == 'days':
             klass = DailyEcowattLevel
