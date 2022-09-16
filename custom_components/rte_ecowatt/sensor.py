@@ -70,11 +70,10 @@ async def async_setup_platform(
 
     # get a token
     coordinator = EcoWattAPICoordinator(hass, config)
-    timezone = hass.config.as_dict()["time_zone"]
 
     sensors = []
-    sensors.append(DailyEcowattLevel(coordinator, 0, timezone))
-    sensors.append(HourlyEcowattLevel(coordinator, 0, timezone))
+    sensors.append(DailyEcowattLevel(coordinator, 0, hass))
+    sensors.append(HourlyEcowattLevel(coordinator, 0, hass))
     for sensor_config in config[CONF_SENSORS]:
         if sensor_config[CONF_SENSOR_UNIT] == "days":
             klass = DailyEcowattLevel
@@ -84,7 +83,7 @@ async def async_setup_platform(
             assert (
                 False
             ), f"{sensor_config[CONF_SENSOR_UNIT]} is invalid, it should have been caught at configuration validation"
-        sensors.append(klass(coordinator, sensor_config[CONF_SENSOR_SHIFT], timezone))
+        sensors.append(klass(coordinator, sensor_config[CONF_SENSOR_SHIFT], hass))
 
     async_add_entities(sensors)
     # force a first refresh immediately to avoid waiting for 16 minutes
@@ -164,13 +163,19 @@ class EcoWattAPICoordinator(DataUpdateCoordinator):
 class AbstractEcowattLevel(CoordinatorEntity, Entity):
     """Representation of ecowatt level for a given day"""
 
-    def __init__(self, coordinator: EcoWattAPICoordinator, shift: int, timezone: str):
+    def __init__(
+        self, coordinator: EcoWattAPICoordinator, shift: int, hass: HomeAssistant
+    ):
         super().__init__(coordinator)
-        self.timezone = timezone
+        self.hass = hass
         self.attrs: Dict[str, Any] = {}
         _LOGGER.info(f"Creating an ecowatt sensor, named {self.name}")
         self._state = None
         self.shift = shift
+
+    def _timezone(self):
+        timezone = self.hass.config.as_dict()["time_zone"]
+        return tz.gettz(timezone)
 
     def _find_ecowatt_level(self) -> int:
         raise NotImplementedError()
@@ -214,20 +219,20 @@ class AbstractEcowattLevel(CoordinatorEntity, Entity):
 
 
 class HourlyEcowattLevel(AbstractEcowattLevel):
-    def __init__(self, coordinator, shift: int, timezone: str):
+    def __init__(self, coordinator, shift: int, hass: HomeAssistant):
         days = shift // 24
         hours = shift % 24
         self._attr_name = f"Ecowatt level {self._day_string(days)} and {hours} hours"
-        super().__init__(coordinator, shift=shift, timezone=timezone)
+        super().__init__(coordinator, shift=shift, hass=hass)
 
     @property
     def unique_id(self) -> str:
         return f"ecowatt-level-in-{self.shift}-hours"
 
     def _find_ecowatt_level(self) -> int:
-        now = datetime.now(tz.gettz(self.timezone))
+        now = datetime.now(self._timezone())
         if "ECOWATT_DEBUG" in os.environ:
-            now = datetime(2022, 6, 3, 8, 0, 0, tzinfo=tz.gettz(self.timezone))
+            now = datetime(2022, 6, 3, 8, 0, 0, tzinfo=self._timezone())
         date_shift = self.shift // 24
         hour_shift = self.shift % 24
         relevant_date = now + timedelta(days=date_shift, hours=hour_shift)
@@ -251,16 +256,16 @@ class HourlyEcowattLevel(AbstractEcowattLevel):
 
 
 class DailyEcowattLevel(AbstractEcowattLevel):
-    def __init__(self, coordinator, shift: int, timezone: str):
+    def __init__(self, coordinator, shift: int, hass: HomeAssistant):
         self._attr_name = f"Ecowatt level {self._day_string(shift)}"
-        super().__init__(coordinator, shift=shift, timezone=timezone)
+        super().__init__(coordinator, shift=shift, hass=hass)
 
     @property
     def unique_id(self) -> str:
         return f"ecowatt-level-in-{self.shift}-days"
 
     def _find_ecowatt_level(self) -> int:
-        today = datetime.now(tz.gettz(self.timezone)).date()
+        today = datetime.now(self._timezone()).date()
         if "ECOWATT_DEBUG" in os.environ:
             today = date(2022, 6, 3)
         relevant_date = today + timedelta(days=self.shift)
