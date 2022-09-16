@@ -190,6 +190,7 @@ class AbstractEcowattLevel(CoordinatorEntity, Entity):
         previous_level = self._attr_extra_state_attributes.get(ATTR_LEVEL_CODE, None)
         self._attr_extra_state_attributes[ATTR_LEVEL_CODE] = ecowatt_level
         self._state = self._level2string(ecowatt_level)
+        self._attr_icon = self._level2icon(ecowatt_level)
         if previous_level != self._attr_extra_state_attributes[ATTR_LEVEL_CODE]:
             _LOGGER.info(f"updated '{self.name}' with level {self._state}")
         self.async_write_ha_state()
@@ -200,6 +201,13 @@ class AbstractEcowattLevel(CoordinatorEntity, Entity):
             2: "Risques de coupures d'électricité",
             # FIXME(kamaradclimber): if happening right now, it should be "Coupure d'électricité en cours"
             3: "Coupures d'électricité programmées",
+        }[level]
+
+    def _level2icon(self, level):
+        return {
+            1: "mdi:check-circle",
+            2: "mdi:alert",
+            3: "mdi:power-plug-off",
         }[level]
 
     @property
