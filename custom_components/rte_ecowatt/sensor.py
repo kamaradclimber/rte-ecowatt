@@ -32,6 +32,7 @@ from .const import (
     CONF_SENSOR_UNIT,
     CONF_SENSOR_SHIFT,
     CONF_SENSORS,
+    ATTR_GENERATION_TIME,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -242,6 +243,9 @@ class HourlyEcowattLevel(AbstractEcowattLevel):
                     lambda e: e["date"] == relevant_date.date(), self.coordinator.data
                 )
             )
+            self._attr_extra_state_attributes[ATTR_GENERATION_TIME] = ecowatt_data[
+                "GenerationFichier"
+            ]
             level = next(
                 filter(lambda e: e["pas"] == relevant_date.hour, ecowatt_data["values"])
             )
@@ -271,6 +275,9 @@ class DailyEcowattLevel(AbstractEcowattLevel):
             ecowatt_data = next(
                 filter(lambda e: e["date"] == relevant_date, self.coordinator.data)
             )
+            self._attr_extra_state_attributes[ATTR_GENERATION_TIME] = ecowatt_data[
+                "GenerationFichier"
+            ]
             return ecowatt_data["dvalue"]
         except StopIteration:
             raise RuntimeError(f"Unable to find ecowatt level for {relevant_date}")

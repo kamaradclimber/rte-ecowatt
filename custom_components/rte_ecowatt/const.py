@@ -9,3 +9,4 @@ BASE_URL = "https://digital.iservices.rte-france.com"
 TOKEN_URL = f"{BASE_URL}/token/oauth/"
 
 ATTR_LEVEL_CODE = "level_code"
+ATTR_GENERATION_TIME = "generation_time"
