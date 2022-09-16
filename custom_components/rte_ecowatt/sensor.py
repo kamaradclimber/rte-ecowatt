@@ -4,6 +4,7 @@ from typing import Any, Callable, Dict, Optional
 import logging
 import json
 import os
+from dateutil import tz
 
 from oauthlib.oauth2 import BackendApplicationClient
 from async_oauthlib import OAuth2Session
@@ -27,16 +28,24 @@ from .const import (
     CONF_CLIENT_SECRET,
     TOKEN_URL,
     BASE_URL,
-    ATTR_LEVEL_CODE
+    ATTR_LEVEL_CODE,
+    CONF_SENSOR_UNIT,
+    CONF_SENSOR_SHIFT,
+    CONF_SENSORS,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
+SENSOR_SCHEMA = vol.Schema({
+    vol.Required(CONF_SENSOR_UNIT): vol.All(cv.string, vol.In(['days', 'hours'])),
+    vol.Required(CONF_SENSOR_SHIFT): vol.Coerce(int)
+})
 
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
         {
             vol.Required(CONF_CLIENT_ID): cv.string,
             vol.Required(CONF_CLIENT_SECRET): cv.string,
+            vol.Required(CONF_SENSORS, default=[]): vol.All(cv.ensure_list, [SENSOR_SCHEMA]),
         }
 )
 
@@ -53,7 +62,19 @@ async def async_setup_platform(
 
     # get a token
     coordinator = EcoWattAPICoordinator(hass, config)
-    async_add_entities(EcowattLevel(coordinator, i) for i in range(4))
+    timezone = hass.config.as_dict()['time_zone']
+
+    sensors = []
+    for sensor_config in config[CONF_SENSORS]:
+        if sensor_config[CONF_SENSOR_UNIT] == 'days':
+            klass = DailyEcowattLevel
+        elif sensor_config[CONF_SENSOR_UNIT] == 'hours':
+            klass = HourlyEcowattLevel
+        else:
+            assert False, f"{sensor_config[CONF_SENSOR_UNIT]} is invalid, it should have been caught at configuration validation"
+        sensors.append(klass(coordinator, sensor_config[CONF_SENSOR_SHIFT], timezone))
+
+    async_add_entities(sensors)
     # force a first refresh immediately to avoid waiting for 16 minutes
     coordinator.schedule_interval = timedelta(minutes=16)
     await coordinator.async_config_entry_first_refresh()
@@ -79,7 +100,7 @@ class EcoWattAPICoordinator(DataUpdateCoordinator):
         session = OAuth2Session(client=client)
         auth = aiohttp.helpers.BasicAuth(self.config[CONF_CLIENT_ID], self.config[CONF_CLIENT_SECRET])
         self.token = await session.fetch_token(token_url=TOKEN_URL, auth=auth)
-        _LOGGER.info(self.token)
+        _LOGGER.debug("Fetched a token for RTE API")
         return session 
 
     async def update_method(self):
@@ -118,49 +139,40 @@ class EcoWattAPICoordinator(DataUpdateCoordinator):
         except Exception as err:
             raise UpdateFailed(f"Error communicating with API: {err}")
 
-
-class EcowattLevel(CoordinatorEntity, Entity):
+class AbstractEcowattLevel(CoordinatorEntity, Entity):
     """Representation of ecowatt level for a given day"""
 
-    def __init__(self, coordinator: EcoWattAPICoordinator, days_in_advance: int):
+    def __init__(self, coordinator: EcoWattAPICoordinator, shift: int, timezone: str):
         super().__init__(coordinator)
+        self.timezone = timezone
         self.attrs: Dict[str,Any] = {}
-        self._name = f"Ecowatt level {self.day_string(date.today() + timedelta(days=days_in_advance))}"
-        _LOGGER.info(f"Creating an ecowatt sensor, named {self._name}")
+        _LOGGER.info(f"Creating an ecowatt sensor, named {self.name}")
         self._state = None
-        self.days_in_advance = days_in_advance
+        self.shift = shift
 
-    def day_string(self, my_date: date):
-        if my_date == date.today():
-            return "today"
-        elif my_date == date.today() - timedelta(days=1):
-            return "tomorrow"
-        else:
-            return f"in {(my_date - date.today()).days} days"
+    def _find_ecowatt_level(self) -> int:
+        raise NotImplementedError()
 
     @callback
     def _handle_coordinator_update(self) -> None:
         if not self.coordinator.last_update_success:
             _LOGGER.debug("Last coordinator failed, assuming state has not changed")
             return
-        today = date.today()
-        if 'ECOWATT_DEBUG' in os.environ:
-            today = date(2022, 6, 3)
-        relevant_date = today + timedelta(days=self.days_in_advance)
-        # FIXME(kamaradclimber): we should deal properly when not finding date of interest
-        ecowatt_data = next(filter(lambda e: e['date'] == relevant_date, self.coordinator.data))
-        self._state = ecowatt_data['message']
-        self.attrs[ATTR_LEVEL_CODE] = ecowatt_data['dvalue']
-        _LOGGER.info(f"updated {self._name} with level {self._state}")
+        ecowatt_level = self._find_ecowatt_level()
+        previous_level = self.attrs.get(ATTR_LEVEL_CODE, None)
+        self.attrs[ATTR_LEVEL_CODE] = ecowatt_level
+        self._state = self._level2string(ecowatt_level)
+        if previous_level != self.attrs[ATTR_LEVEL_CODE]:
+            _LOGGER.info(f"updated '{self.name}' with level {self._state}")
         self.async_write_ha_state()
 
-    @property
-    def name(self) -> str:
-        return self._name
-
-    @property
-    def unique_id(self) -> str:
-        return f"ecowatt-level-in-{self.days_in_advance}-days"
+    def _level2string(self, level):
+        return {
+            1: 'Situation normale',
+            2: "Risques de coupures d'électricité",
+            # FIXME(kamaradclimber): if happening right now, it should be "Coupure d'électricité en cours"
+            3: "Coupures d'électricité programmées",
+        }[level]
 
     @property
     def state(self) -> Optional[str]:
@@ -169,3 +181,62 @@ class EcowattLevel(CoordinatorEntity, Entity):
     @property
     def device_state_attributes(self) -> Dict[str, Any]:
         return self.attrs
+
+    def _day_string(self, day_shift):
+        if day_shift == 0:
+            return "today"
+        elif day_shift == 1:
+            return "tomorrow"
+        else:
+            return f"in {day_shift} days"
+
+class HourlyEcowattLevel(AbstractEcowattLevel):
+    def __init__(self, coordinator, shift: int, timezone: str):
+        days = shift // 24
+        hours = shift % 24
+        self._attr_name = f"Ecowatt level {self._day_string(days)} and {hours} hours"
+        super().__init__(coordinator, shift=shift, timezone=timezone)
+
+
+    @property
+    def unique_id(self) -> str:
+        return f"ecowatt-level-in-{self.shift}-hours"
+
+    def _find_ecowatt_level(self) -> int:
+        now = datetime.now(tz.gettz(self.timezone))
+        if 'ECOWATT_DEBUG' in os.environ:
+            now = datetime(2022, 6, 3, 8, 0, 0, tzinfo=tz.gettz(self.timezone))
+        date_shift = self.shift // 24
+        hour_shift = self.shift % 24
+        relevant_date = now + timedelta(days=date_shift, hours=hour_shift)
+        _LOGGER.debug(f"Looking for {relevant_date}")
+        ecowatt_data = None
+        try:
+            ecowatt_data = next(filter(lambda e: e['date'] == relevant_date.date(), self.coordinator.data))
+            level  = next(filter(lambda e: e['pas'] == relevant_date.hour, ecowatt_data['values']))
+            return level['hvalue']
+        except StopIteration:
+            _LOGGER.info(f"Data for relevant day: {ecowatt_data}")
+            raise RuntimeError(f"Unable to find ecowatt level for {relevant_date} (hour shift: {hour_shift})")
+
+class DailyEcowattLevel(AbstractEcowattLevel):
+    def __init__(self, coordinator, shift: int, timezone: str):
+        self._attr_name = f"Ecowatt level {self._day_string(shift)}"
+        super().__init__(coordinator, shift=shift, timezone=timezone)
+
+    @property
+    def unique_id(self) -> str:
+        return f"ecowatt-level-in-{self.shift}-days"
+
+    def _find_ecowatt_level(self) -> int:
+        today = datetime.now(tz.gettz(self.timezone)).date()
+        if 'ECOWATT_DEBUG' in os.environ:
+            today = date(2022, 6, 3)
+        relevant_date = today + timedelta(days=self.shift)
+        try:
+            ecowatt_data = next(filter(lambda e: e['date'] == relevant_date, self.coordinator.data))
+            return ecowatt_data['dvalue']
+        except StopIteration:
+            raise RuntimeError(f"Unable to find ecowatt level for {relevant_date}")
+
+
