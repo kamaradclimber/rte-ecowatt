@@ -97,8 +97,6 @@ async def async_setup_platform(
     # force a first refresh immediately to avoid waiting for 16 minutes
     coordinator.schedule_interval = timedelta(minutes=16)
     await coordinator.async_config_entry_first_refresh()
-    # trigger refresh *after* instanciating sensors that subscribe to it
-    await coordinator.async_refresh()
     _LOGGER.info("We finished the setup of ecowatt platform")
 
 
