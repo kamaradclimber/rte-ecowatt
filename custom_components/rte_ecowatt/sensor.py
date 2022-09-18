@@ -1,10 +1,11 @@
 import voluptuous as vol
-from datetime import timedelta, date, datetime
-from typing import Any, Callable, Dict, Optional
+from datetime import timedelta, datetime
+from typing import Any, Dict, Optional, Tuple
 import logging
 import json
 import os
 from dateutil import tz
+from itertools import dropwhile, takewhile
 
 from oauthlib.oauth2 import BackendApplicationClient
 from async_oauthlib import OAuth2Session
@@ -12,7 +13,10 @@ import aiohttp
 
 from homeassistant.core import HomeAssistant, callback
 import homeassistant.helpers.config_validation as cv
-from homeassistant.components.sensor import PLATFORM_SCHEMA
+from homeassistant.components.sensor import (
+        PLATFORM_SCHEMA,
+        SensorEntity,
+        )
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.entity import Entity
@@ -35,6 +39,7 @@ from .const import (
     ATTR_GENERATION_TIME,
     ATTR_PERIOD_START,
     ATTR_PERIOD_END,
+    ATTR_PERIOD_DURATION
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -77,6 +82,7 @@ async def async_setup_platform(
     sensors = []
     sensors.append(DailyEcowattLevel(coordinator, 0, hass))
     sensors.append(HourlyEcowattLevel(coordinator, 0, hass))
+    sensors.append(NextDowngradedEcowattLevel(coordinator, hass))
     for sensor_config in config[CONF_SENSORS]:
         if sensor_config[CONF_SENSOR_UNIT] == "days":
             klass = DailyEcowattLevel
@@ -161,6 +167,70 @@ class EcoWattAPICoordinator(DataUpdateCoordinator):
             return signals
         except Exception as err:
             raise UpdateFailed(f"Error communicating with API: {err}")
+
+class NextDowngradedEcowattLevel(CoordinatorEntity, SensorEntity):
+    """Expose next downgraded period"""
+
+    def __init__(
+            self, coordinator: EcoWattAPICoordinator, hass: HomeAssistant
+    ):
+        super().__init__(coordinator)
+        self.hass = hass
+        _LOGGER.info("Creating ecowatt sensor for next downgraded period")
+        self._name = "Next downgraded period"
+        self._state = None
+        self._attr_extra_state_attributes: Dict[str, Any] = {}
+
+    @property
+    def unique_id(self) -> str:
+        return f"ecowatt-next-downgraded-period"
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        if not self.coordinator.last_update_success:
+            _LOGGER.debug("Last coordinator failed, assuming state has not changed")
+            return
+        optional_period = self._find_next_downgraded_period()
+        if not optional_period:
+            optional_period = (None, None)
+        (period_start, period_end) = optional_period
+        previous_state = self._state
+        previous_end = self._attr_extra_state_attributes.get(ATTR_PERIOD_END, None)
+        self._state = period_start
+        self._attr_extra_state_attributes[ATTR_PERIOD_END] = period_end
+
+        if (self._state, self._attr_extra_state_attributes[ATTR_PERIOD_END]) != (previous_state, previous_end):
+            _LOGGER.info(f"updated '{self.name}'")
+        self.async_write_ha_state()
+
+    @property
+    def state(self) -> Optional[datetime]:
+        return self._state
+
+    @property
+    def native_value(self) -> Optional[datetime]:
+        return self._state
+
+    def _find_next_downgraded_period(self) -> Optional[Tuple[datetime, datetime]]:
+        now = datetime.now(self._timezone())
+        if "ECOWATT_DEBUG" in os.environ:
+            now = datetime(2022, 6, 3, 8, 0, 0, tzinfo=self._timezone())
+        all_values = []
+        for day_data in self.coordinator.data:
+            for hour_data in day_data['values']:
+                date = datetime.combine(day_data['date'], datetime.min.time(), tzinfo=self._timezone()) + timedelta(hours=hour_data['pas'])
+                all_values.append(hour_data | {'date': date})
+        future_values = dropwhile(lambda data: data['date'] < now, all_values)
+        first_downgraded = dropwhile(lambda data: data['hvalue'] < 2, future_values)
+        all_downgraded_period = list(takewhile(lambda data: data['hvalue'] >= 2, first_downgraded))
+        if len(all_downgraded_period) == 0:
+            return None
+        return (all_downgraded_period[0]['date'], all_downgraded_period[-1]['date'] + timedelta(hours=1))
+
+    def _timezone(self):
+        timezone = self.hass.config.as_dict()["time_zone"]
+        return tz.gettz(timezone)
+
 
 
 class AbstractEcowattLevel(CoordinatorEntity, Entity):
