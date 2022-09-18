@@ -208,6 +208,10 @@ class NextDowngradedEcowattLevel(CoordinatorEntity, SensorEntity):
     def native_value(self) -> Optional[datetime]:
         return self._state
 
+    @property
+    def device_class(self) -> str:
+        return 'timestamp'
+
     def _find_next_downgraded_period(self) -> Optional[Tuple[datetime, datetime]]:
         now = datetime.now(self._timezone())
         if "ECOWATT_DEBUG" in os.environ:
