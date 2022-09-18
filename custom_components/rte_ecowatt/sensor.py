@@ -16,6 +16,7 @@ import homeassistant.helpers.config_validation as cv
 from homeassistant.components.sensor import (
     PLATFORM_SCHEMA,
     SensorEntity,
+    RestoreSensor,
 )
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -130,6 +131,10 @@ class EcoWattAPICoordinator(DataUpdateCoordinator):
         so entities can quickly look up their data.
         """
         try:
+            if "ECOWATT_APIFAIL" in os.environ:
+                raise UpdateFailed(
+                    "Failing update on purpose to test state restoration"
+                )
             _LOGGER.debug("Starting collecting data")
             client = await self.async_oauth_client()
             headers = {
@@ -166,7 +171,20 @@ class EcoWattAPICoordinator(DataUpdateCoordinator):
             raise UpdateFailed(f"Error communicating with API: {err}")
 
 
-class NextDowngradedEcowattLevel(CoordinatorEntity, SensorEntity):
+class RestorableCoordinatedSensor(RestoreSensor):
+    async def async_added_to_hass(self):
+        await super().async_added_to_hass()
+        _LOGGER.debug("starting to restore sensor from previous data")
+        if (last_stored_state := await self._async_get_restored_data()) is not None:
+            old_state = last_stored_state.state.as_dict()
+            _LOGGER.debug(f"restored state: {old_state}")
+            self._state = old_state["state"]
+            for key, value in old_state["attributes"].items():
+                self._attr_extra_state_attributes[key] = value
+            self.coordinator.last_update_success = True
+
+
+class NextDowngradedEcowattLevel(CoordinatorEntity, RestorableCoordinatedSensor):
     """Expose next downgraded period"""
 
     def __init__(self, coordinator: EcoWattAPICoordinator, hass: HomeAssistant):
@@ -242,7 +260,7 @@ class NextDowngradedEcowattLevel(CoordinatorEntity, SensorEntity):
         return tz.gettz(timezone)
 
 
-class AbstractEcowattLevel(CoordinatorEntity, Entity):
+class AbstractEcowattLevel(CoordinatorEntity, RestorableCoordinatedSensor):
     """Representation of ecowatt level for a given day"""
 
     def __init__(
@@ -304,6 +322,10 @@ class AbstractEcowattLevel(CoordinatorEntity, Entity):
             return "tomorrow"
         else:
             return f"in {day_shift} days"
+
+    @property
+    def native_value(self):
+        return self._state
 
 
 class HourlyEcowattLevel(AbstractEcowattLevel):
