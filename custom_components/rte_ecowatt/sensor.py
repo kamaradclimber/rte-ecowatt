@@ -39,7 +39,6 @@ from .const import (
     ATTR_GENERATION_TIME,
     ATTR_PERIOD_START,
     ATTR_PERIOD_END,
-    ATTR_PERIOD_DURATION
 )
 
 _LOGGER = logging.getLogger(__name__)
