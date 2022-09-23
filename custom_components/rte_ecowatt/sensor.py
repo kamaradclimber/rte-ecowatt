@@ -6,6 +6,7 @@ import json
 import os
 from dateutil import tz
 from itertools import dropwhile, takewhile
+import asyncio
 
 from oauthlib.oauth2 import BackendApplicationClient
 from async_oauthlib import OAuth2Session
@@ -95,9 +96,23 @@ async def async_setup_platform(
         sensors.append(klass(coordinator, sensor_config[CONF_SENSOR_SHIFT], hass))
 
     async_add_entities(sensors)
+
+    while not all(s.restored for s in sensors):
+        _LOGGER.debug("Wait for all sensors to have been restored")
+        await asyncio.sleep(0.2)
+    _LOGGER.debug("All sensors have been restored properly")
+
+    # we declare update_interval after initialization to avoid a first refresh before we setup entities
+    coordinator.update_interval = timedelta(minutes=16)
     # force a first refresh immediately to avoid waiting for 16 minutes
-    coordinator.schedule_interval = timedelta(minutes=16)
-    await coordinator.async_config_entry_first_refresh()
+    if any(s.state is None for s in sensors):  # one sensor needs immediate refresh
+        await coordinator.async_config_entry_first_refresh()
+    else:
+        # it means we might not get up to date info if HA was stopped for a while. TODO: detect last refresh for each sensor to take the best decision
+        _LOGGER.info(
+            "All sensors have already a known state, we'll wait next refresh to avoid hitting API limit after a restart"
+        )
+        coordinator._schedule_refresh()
     _LOGGER.info("We finished the setup of ecowatt platform")
 
 
@@ -131,6 +146,9 @@ class EcoWattAPICoordinator(DataUpdateCoordinator):
         so entities can quickly look up their data.
         """
         try:
+            _LOGGER.debug(
+                f"Calling update method, {len(self._listeners)} listeners subscribed"
+            )
             if "ECOWATT_APIFAIL" in os.environ:
                 raise UpdateFailed(
                     "Failing update on purpose to test state restoration"
@@ -172,6 +190,10 @@ class EcoWattAPICoordinator(DataUpdateCoordinator):
 
 
 class RestorableCoordinatedSensor(RestoreSensor):
+    @property
+    def restored(self):
+        return self._restored
+
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
         _LOGGER.debug("starting to restore sensor from previous data")
@@ -182,6 +204,8 @@ class RestorableCoordinatedSensor(RestoreSensor):
             for key, value in old_state["attributes"].items():
                 self._attr_extra_state_attributes[key] = value
             self.coordinator.last_update_success = True
+        # signal restoration happened
+        self._restored = True
 
 
 class NextDowngradedEcowattLevel(CoordinatorEntity, RestorableCoordinatedSensor):
@@ -189,6 +213,7 @@ class NextDowngradedEcowattLevel(CoordinatorEntity, RestorableCoordinatedSensor)
 
     def __init__(self, coordinator: EcoWattAPICoordinator, hass: HomeAssistant):
         super().__init__(coordinator)
+        self._restored = False
         self.hass = hass
         _LOGGER.info("Creating ecowatt sensor for next downgraded period")
         self._name = "Next downgraded period"
@@ -267,6 +292,7 @@ class AbstractEcowattLevel(CoordinatorEntity, RestorableCoordinatedSensor):
         self, coordinator: EcoWattAPICoordinator, shift: int, hass: HomeAssistant
     ):
         super().__init__(coordinator)
+        self._restored = False
         self.hass = hass
         self._attr_extra_state_attributes: Dict[str, Any] = {}
         _LOGGER.info(f"Creating an ecowatt sensor, named {self.name}")
