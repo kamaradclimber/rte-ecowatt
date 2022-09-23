@@ -8,5 +8,5 @@
   "domain": "rte_ecowatt",
   "iot_class": "cloud_polling",
   "name": "My EcoWatt by RTE",
-  "version": "0.1.0"
+  "version": "0.1.1"
 }
