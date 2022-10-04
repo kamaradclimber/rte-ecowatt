@@ -15,5 +15,3 @@ jobs:
         uses: "hacs/action@main"
         with:
           category: "integration"
-          # we ignore brands check for now, once added as a repository in hacs, we should fix this
-          ignore: brands
