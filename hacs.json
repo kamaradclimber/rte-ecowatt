@@ -1,6 +1,5 @@
 {
   "name": "My EcoWatt by RTE",
   "render_readme": true,
-  "country": "fr",
-  "iot_class": "cloud_polling"
+  "country": "fr"
 }
