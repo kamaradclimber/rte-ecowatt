@@ -65,6 +65,16 @@ async def async_setup_entry(
     sensors.append(DailyEcowattLevel(coordinator, 0, hass))
     sensors.append(HourlyEcowattLevel(coordinator, 0, hass))
     sensors.append(NextDowngradedEcowattLevel(coordinator, hass))
+
+    for sensor_config in entry.data["sensors"]:
+        if sensor_config[CONF_SENSOR_UNIT] == "days":
+            klass = DailyEcowattLevel
+        elif sensor_config[CONF_SENSOR_UNIT] == "hours":
+            klass = HourlyEcowattLevel
+        else:
+            raise Exception("Unknown sensor unit type")
+        sensors.append(klass(coordinator, sensor_config[CONF_SENSOR_SHIFT], hass))
+
     async_add_entities(sensors)
     while not all(s.restored for s in sensors):
         _LOGGER.debug("Wait for all sensors to have been restored")
