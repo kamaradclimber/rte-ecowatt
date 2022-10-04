@@ -3,14 +3,12 @@
   "config": {
     "step": {
       "user": {
-          "title": "Enter credentials to access RTE api",
-          "description": "Some description",
+          "description": "Enter credentials to access RTE api",
           "data": {
               "api_client_id": "API Client ID",
               "api_client_secret": "API Client secret"
           },
           "data_description": {
-              "entities": "The entities to add to the group"
           }
       }
     },
