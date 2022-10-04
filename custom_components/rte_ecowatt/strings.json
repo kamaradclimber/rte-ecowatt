@@ -1,0 +1,21 @@
+{
+  "title": "My EcoWatt by RTE",
+  "config": {
+    "step": {
+      "user": {
+          "title": "Enter credentials to access RTE api",
+          "description": "Some description",
+          "data": {
+              "api_client_id": "API Client ID",
+              "api_client_secret": "API Client secret"
+          },
+          "data_description": {
+              "entities": "The entities to add to the group"
+          }
+      }
+    },
+    "error": {
+      "auth_error": "Authentication failed, credentials must be invalid"
+    }
+  }
+}
