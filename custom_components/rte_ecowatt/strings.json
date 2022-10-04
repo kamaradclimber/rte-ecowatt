@@ -13,7 +13,8 @@
       }
     },
     "error": {
-      "auth_error": "Authentication failed, credentials must be invalid"
+      "auth_error": "Authentication failed, credentials must be invalid",
+      "generic_error": "Connection to RTE api failed for an unknown reason"
     }
   }
 }

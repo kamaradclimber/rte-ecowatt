@@ -54,6 +54,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
+class AsyncOauthClient:
+    def __init__(self, config):
+        self.config = config
+        self.token = ""
+
+    async def client(self):
+        client = BackendApplicationClient(client_id=self.config[CONF_CLIENT_ID])
+        session = OAuth2Session(client=client)
+        auth = aiohttp.helpers.BasicAuth(
+            self.config[CONF_CLIENT_ID], self.config[CONF_CLIENT_SECRET]
+        )
+        self.token = await session.fetch_token(token_url=TOKEN_URL, auth=auth)
+        _LOGGER.debug("Fetched a token for RTE API")
+        return session
+
+
 class EcoWattAPICoordinator(DataUpdateCoordinator):
     """A coordinator to fetch data from the api only once"""
 
@@ -66,16 +82,12 @@ class EcoWattAPICoordinator(DataUpdateCoordinator):
         )
         self.config = config
         self.hass = hass
+        self.oauth_client = AsyncOauthClient(config)
 
     async def async_oauth_client(self):
-        client = BackendApplicationClient(client_id=self.config[CONF_CLIENT_ID])
-        session = OAuth2Session(client=client)
-        auth = aiohttp.helpers.BasicAuth(
-            self.config[CONF_CLIENT_ID], self.config[CONF_CLIENT_SECRET]
-        )
-        self.token = await session.fetch_token(token_url=TOKEN_URL, auth=auth)
-        _LOGGER.debug("Fetched a token for RTE API")
-        return session
+        client = await self.oauth_client.client()
+        self.token = client.token
+        return client
 
     async def update_method(self):
         """Fetch data from API endpoint.
