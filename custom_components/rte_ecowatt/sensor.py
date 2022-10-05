@@ -1,18 +1,16 @@
 import voluptuous as vol
 from datetime import timedelta, datetime
-from typing import Any, Dict, Optional, Tuple
+from typing import Optional
 import logging
 import asyncio
 
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 import homeassistant.helpers.config_validation as cv
 from homeassistant.components.sensor import (
     PLATFORM_SCHEMA,
-    SensorEntity,
 )
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.entity import Entity
 from homeassistant.config_entries import ConfigEntry
 
 from . import (
@@ -25,15 +23,9 @@ from .const import (
     DOMAIN,
     CONF_CLIENT_ID,
     CONF_CLIENT_SECRET,
-    TOKEN_URL,
-    BASE_URL,
-    ATTR_LEVEL_CODE,
     CONF_SENSOR_UNIT,
     CONF_SENSOR_SHIFT,
     CONF_SENSORS,
-    ATTR_GENERATION_TIME,
-    ATTR_PERIOD_START,
-    ATTR_PERIOD_END,
 )
 
 _LOGGER = logging.getLogger(__name__)
