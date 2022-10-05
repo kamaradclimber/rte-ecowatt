@@ -1,1 +1,45 @@
-../strings.json
+{
+  "title": "My EcoWatt by RTE",
+  "config": {
+    "step": {
+      "user": {
+          "description": "Enter credentials to access RTE api",
+          "data": {
+              "api_client_id": "API Client ID",
+              "api_client_secret": "API Client secret"
+          },
+          "menu_options": {
+            "finish_configuration": "Finish configuration and use default sensors",
+            "configure_hours_sensor": "Configure a sensor with hour granularity",
+            "configure_days_sensor": "Configure a sensor with day granularity"
+          }
+      },
+      "configure_hours_sensor": {
+          "description": "New hourly sensor",
+          "data": {
+              "shift": "How many hours in the future?"
+          },
+          "menu_options": {
+            "finish_configuration": "Finish configuration",
+            "configure_hours_sensor": "Configure another sensor with hour granularity",
+            "configure_days_sensor": "Configure another sensor with day granularity"
+          }
+      },
+      "configure_days_sensor": {
+          "description": "New daily sensor",
+          "data": {
+              "shift": "How many days in the future?"
+          },
+          "menu_options": {
+            "finish_configuration": "Finish configuration",
+            "configure_hours_sensor": "Configure another sensor with hour granularity",
+            "configure_days_sensor": "Configure another sensor with day granularity"
+          }
+      }
+    },
+    "error": {
+      "auth_error": "Authentication failed, credentials must be invalid",
+      "generic_error": "Connection to RTE api failed for an unknown reason"
+    }
+  }
+}
