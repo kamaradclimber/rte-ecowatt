@@ -51,10 +51,7 @@ class SetupConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 _LOGGER.debug("Connectivity to RTE api validated")
                 self.user_input = user_input
 
-                return self.async_show_menu(
-                    step_id="user",
-                    menu_options=["finish_configuration", "manual_configuration"],
-                )
+                return self._configuration_menu("user")
 
         data_schema = {
             vol.Required(CONF_CLIENT_ID): cv.string,
@@ -63,6 +60,16 @@ class SetupConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="user", data_schema=vol.Schema(data_schema), errors=errors
+        )
+
+    def _configuration_menu(self, step_id: str):
+        return self.async_show_menu(
+            step_id=step_id,
+            menu_options=[
+                "finish_configuration",
+                "configure_hours_sensor",
+                "configure_days_sensor",
+            ],
         )
 
     async def async_step_finish_configuration(
@@ -74,32 +81,39 @@ class SetupConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # will call async_setup_entry defined in __init__.py file
         return self.async_create_entry(title="ecowatt by RTE", data=self.user_input)
 
-    async def async_step_manual_configuration(
+    async def async_step_configure_hours_sensor(
         self, user_input: dict[str, Any] | None = None
     ):
+        return self._manual_configuration_step(
+            "hours", vol.In(range(4 * 24)), user_input
+        )
+
+    async def async_step_configure_days_sensor(
+        self, user_input: dict[str, Any] | None = None
+    ):
+        return self._manual_configuration_step("days", vol.In(range(4)), user_input)
+
+    def _manual_configuration_step(
+        self, sensor_unit, validator, user_input: dict[str, Any] | None = None
+    ):
+        step_name = f"configure_{sensor_unit}_sensor"
         errors = {}
         data_schema = {
-            vol.Required(CONF_SENSOR_SHIFT): vol.Coerce(int),
-            vol.Required(CONF_SENSOR_UNIT): vol.All(
-                cv.string, vol.In(["days", "hours"])
-            ),
+            vol.Required(CONF_SENSOR_SHIFT): vol.All(vol.Coerce(int), validator),
         }
         if user_input is not None:
             if "sensors" not in self.user_input:
                 self.user_input["sensors"] = []
-            # FIXME(kamaradclimber): here we should validate sensors? or maybe it will be done by the form itself?
             self.user_input["sensors"].append(
                 {
-                    CONF_SENSOR_UNIT: user_input[CONF_SENSOR_UNIT],
+                    CONF_SENSOR_UNIT: sensor_unit,
                     CONF_SENSOR_SHIFT: user_input[CONF_SENSOR_SHIFT],
                 }
             )
-            return self.async_show_menu(
-                step_id="manual_configuration",
-                menu_options=["finish_configuration", "manual_configuration"],
-            )
+            return self._configuration_menu(step_name)
+
         return self.async_show_form(
-            step_id="manual_configuration",
+            step_id=step_name,
             data_schema=vol.Schema(data_schema),
             errors=errors,
         )

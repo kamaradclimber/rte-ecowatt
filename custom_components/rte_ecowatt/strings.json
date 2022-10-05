@@ -10,18 +10,30 @@
           },
           "menu_options": {
             "finish_configuration": "Finish configuration and use default sensors",
-            "manual_configuration": "Configure manually each sensor"
+            "configure_hours_sensor": "Configure a sensor with hour granularity",
+            "configure_days_sensor": "Configure a sensor with day granularity"
           }
       },
-      "manual_configuration": {
-          "description": "New sensor configuration",
+      "configure_hours_sensor": {
+          "description": "New hourly sensor",
           "data": {
-              "shift": "How much in the future?",
-              "unit": "in which unit?"
+              "shift": "How many hours in the future?"
           },
           "menu_options": {
-            "finish_configuration": "Finish configuration for this integration",
-            "manual_configuration": "Configure a new sensor"
+            "finish_configuration": "Finish configuration",
+            "configure_hours_sensor": "Configure another sensor with hour granularity",
+            "configure_days_sensor": "Configure another sensor with day granularity"
+          }
+      },
+      "configure_days_sensor": {
+          "description": "New daily sensor",
+          "data": {
+              "shift": "How many days in the future?"
+          },
+          "menu_options": {
+            "finish_configuration": "Finish configuration",
+            "configure_hours_sensor": "Configure another sensor with hour granularity",
+            "configure_days_sensor": "Configure another sensor with day granularity"
           }
       }
     },
