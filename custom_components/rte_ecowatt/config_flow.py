@@ -1,13 +1,10 @@
 import voluptuous as vol
 import logging
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 from oauthlib.oauth2 import rfc6749
 
 from homeassistant import config_entries
 import homeassistant.helpers.config_validation as cv
-from homeassistant.core import HomeAssistant
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
 from .const import (
