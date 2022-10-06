@@ -4,7 +4,10 @@ CONF_CLIENT_SECRET = "api_client_secret"
 CONF_SENSORS = "sensors"
 CONF_SENSOR_UNIT = "unit"
 CONF_SENSOR_SHIFT = "shift"
-
+CONF_SENSOR_DAY = "Jour(s)"
+CONF_SENSOR_HOUR = "Heure(s)"
+CONF_SENSOR_UNIT_OPTIONS = [CONF_SENSOR_DAY, CONF_SENSOR_HOUR]
+CONF_SENSOR_NEW = "add_another"
 BASE_URL = "https://digital.iservices.rte-france.com"
 TOKEN_URL = f"{BASE_URL}/token/oauth/"
 
@@ -12,3 +15,6 @@ ATTR_LEVEL_CODE = "level_code"
 ATTR_GENERATION_TIME = "generation_time"
 ATTR_PERIOD_START = "period_start"
 ATTR_PERIOD_END = "period_end"
+
+SENSOR = "sensor"
+PLATFORMS = [SENSOR]

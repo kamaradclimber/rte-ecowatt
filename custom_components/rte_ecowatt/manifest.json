@@ -1,6 +1,8 @@
 {
-  "codeowners": ["@kamaradclimber"],
-  "config_flow": false,
+  "codeowners": [
+    "@kamaradclimber"
+  ],
+  "config_flow": true,
   "requirements": [
     "Async-OAuthlib==0.0.9"
   ],

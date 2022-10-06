@@ -1,0 +1,23 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "data": {
+                    "api_client_id": "Client ID",
+                    "api_client_secret": "Client secret"
+                },
+                "description": "Saisir vos idenifiants",
+                "title": "Authentification"
+            },
+            "sensors": {
+                "data": {
+                    "add_anoter": "Ajouter un capteur",
+                    "unit": "Unité",
+                    "shift": "Décallage"
+                },
+                "description": "Ajouter un capteur",
+                "title": "Capteur"
+            }
+        }
+    }
+}

@@ -1,6 +1,6 @@
 import voluptuous as vol
-from datetime import timedelta, date, datetime
-from typing import Any, Callable, Dict, Optional
+from datetime import timedelta, datetime
+from typing import Any, Dict, Optional
 import logging
 import json
 import os
@@ -26,6 +26,8 @@ from homeassistant.config_entries import ConfigEntry
 from .const import (
     CONF_CLIENT_ID,
     CONF_CLIENT_SECRET,
+    CONF_SENSOR_DAY,
+    CONF_SENSOR_HOUR,
     TOKEN_URL,
     BASE_URL,
     ATTR_LEVEL_CODE,
@@ -35,6 +37,7 @@ from .const import (
     ATTR_GENERATION_TIME,
     ATTR_PERIOD_START,
     ATTR_PERIOD_END,
+    DOMAIN,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -61,6 +64,36 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     _LOGGER.info("Called async setup entry")
+    coordinator = EcoWattAPICoordinator(hass, entry)
+
+    _LOGGER.info(coordinator)
+    sensors = []
+    config = hass.data[DOMAIN][entry.entry_id]
+
+    _LOGGER.debug(config)
+    # Default Sensors
+    sensors.append(DailyEcowattLevel(coordinator, 0, hass))
+    sensors.append(HourlyEcowattLevel(coordinator, 0, hass))
+
+    # Configured sensors
+    for sensor_config in config[CONF_SENSORS]:
+        if sensor_config[CONF_SENSOR_UNIT] == CONF_SENSOR_DAY:
+            klass = DailyEcowattLevel
+        elif sensor_config[CONF_SENSOR_UNIT] == CONF_SENSOR_HOUR:
+            klass = HourlyEcowattLevel
+        else:
+            assert (
+                False
+            ), f"{sensor_config[CONF_SENSOR_UNIT]} is invalid, it should have been caught at configuration validation"
+        sensors.append(klass(coordinator, sensor_config[CONF_SENSOR_SHIFT], hass))
+    async_add_entities(sensors)
+
+    # force a first refresh immediately to avoid waiting for 16 minutes
+    coordinator.schedule_interval = timedelta(minutes=16)
+    await coordinator.async_config_entry_first_refresh()
+    # trigger refresh *after* instanciating sensors that subscribe to it
+    await coordinator.async_refresh()
+    _LOGGER.info("We finished the setup of ecowatt platform")
 
 
 async def async_setup_platform(
@@ -70,51 +103,55 @@ async def async_setup_platform(
     discovery_info: Optional[DiscoveryInfoType] = None,
 ):
     """Set up the My EcoWatt by RTE component."""
-
+    _LOGGER.info("Called async_setup_platform in sensor.py")
     # get a token
-    coordinator = EcoWattAPICoordinator(hass, config)
+    # coordinator = EcoWattAPICoordinator(hass, config)
+    # _LOGGER.debug("Called setup platform ....")
+    # sensors = []
+    # sensors.append(DailyEcowattLevel(coordinator, 0, hass))
+    # sensors.append(HourlyEcowattLevel(coordinator, 0, hass))
+    # for sensor_config in config[CONF_SENSORS]:
+    #     if sensor_config[CONF_SENSOR_UNIT] == "days":
+    #         klass = DailyEcowattLevel
+    #     elif sensor_config[CONF_SENSOR_UNIT] == "hours":
+    #         klass = HourlyEcowattLevel
+    #     else:
+    #         assert (
+    #             False
+    #         ), f"{sensor_config[CONF_SENSOR_UNIT]} is invalid, it should have been caught at configuration validation"
+    #     sensors.append(klass(coordinator, sensor_config[CONF_SENSOR_SHIFT], hass))
 
-    sensors = []
-    sensors.append(DailyEcowattLevel(coordinator, 0, hass))
-    sensors.append(HourlyEcowattLevel(coordinator, 0, hass))
-    for sensor_config in config[CONF_SENSORS]:
-        if sensor_config[CONF_SENSOR_UNIT] == "days":
-            klass = DailyEcowattLevel
-        elif sensor_config[CONF_SENSOR_UNIT] == "hours":
-            klass = HourlyEcowattLevel
-        else:
-            assert (
-                False
-            ), f"{sensor_config[CONF_SENSOR_UNIT]} is invalid, it should have been caught at configuration validation"
-        sensors.append(klass(coordinator, sensor_config[CONF_SENSOR_SHIFT], hass))
-
-    async_add_entities(sensors)
-    # force a first refresh immediately to avoid waiting for 16 minutes
-    coordinator.schedule_interval = timedelta(minutes=16)
-    await coordinator.async_config_entry_first_refresh()
-    # trigger refresh *after* instanciating sensors that subscribe to it
-    await coordinator.async_refresh()
-    _LOGGER.info("We finished the setup of ecowatt platform")
+    # async_add_entities(sensors)
+    # # force a first refresh immediately to avoid waiting for 16 minutes
+    # coordinator.schedule_interval = timedelta(minutes=16)
+    # await coordinator.async_config_entry_first_refresh()
+    # # trigger refresh *after* instanciating sensors that subscribe to it
+    # await coordinator.async_refresh()
+    # _LOGGER.info("We finished the setup of ecowatt platform")
 
 
 class EcoWattAPICoordinator(DataUpdateCoordinator):
     """A coordinator to fetch data from the api only once"""
 
-    def __init__(self, hass, config: ConfigType):
+    def __init__(self, hass, config_entry: ConfigEntry):
         super().__init__(
             hass,
             _LOGGER,
             name="ecowatt api",  # for logging purpose
             update_method=self.update_method,
         )
-        self.config = config
+        self._config_entry = config_entry
         self.hass = hass
+        self.platforms = []
 
     async def async_oauth_client(self):
-        client = BackendApplicationClient(client_id=self.config[CONF_CLIENT_ID])
+        client = BackendApplicationClient(
+            client_id=self._config_entry.data.get(CONF_CLIENT_ID)
+        )
         session = OAuth2Session(client=client)
         auth = aiohttp.helpers.BasicAuth(
-            self.config[CONF_CLIENT_ID], self.config[CONF_CLIENT_SECRET]
+            self._config_entry.data.get(CONF_CLIENT_ID),
+            self._config_entry.data.get(CONF_CLIENT_SECRET),
         )
         self.token = await session.fetch_token(token_url=TOKEN_URL, auth=auth)
         _LOGGER.debug("Fetched a token for RTE API")

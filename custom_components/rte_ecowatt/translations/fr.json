@@ -1,0 +1,44 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "data": {
+                    "api_client_id": "Id Client",
+                    "api_client_secret": "Client secret"
+                },
+                "description": "Saisir vos identifiants",
+                "title": "Authentificiation"
+            },
+            "sensors": {
+                "data": {
+                    "add_another": "Ajouter un capteur",
+                    "unit": "Unité",
+                    "shift": "Décallage"
+                },
+                "description": "Ajouter un capteur",
+                "title": "Capteur"
+            }
+        }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "title": "Edition",
+                "data": {
+                    "add_another": "Ajouter un capteur"
+                }
+            },
+            "sensor": {
+                "data": {
+                    "api_client_id": "Id Client",
+                    "api_client_secret": "Client secret",
+                    "add_another": "Ajouter un capteur",
+                    "unit": "Unité",
+                    "shift": "Décallage"
+                },
+                "description": "Saisir les paramètres",
+                "title": "Nouveau Capteur"
+            }
+        }
+    }
+}
