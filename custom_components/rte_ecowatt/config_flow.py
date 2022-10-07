@@ -1,6 +1,6 @@
 import voluptuous as vol
 import logging
-from typing import Any
+from typing import Any, Optional
 from oauthlib.oauth2 import rfc6749
 
 from homeassistant import config_entries
@@ -27,7 +27,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class SetupConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    async def async_step_user(self, user_input: dict[str, Any] | None = None):
+    async def async_step_user(self, user_input: Optional[dict[str, Any]] = None):
         """Called once with None as user_input, then a second time with user provided input"""
         errors = {}
         valid = False
@@ -75,7 +75,7 @@ class SetupConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_finish_configuration(
-        self, user_input: dict[str, Any] | None = None
+        self, user_input: Optional[dict[str, Any]] = None
     ):
         _LOGGER.info(f"Configuration from user is finished, input is {self.user_input}")
         await self.async_set_unique_id(self.user_input[CONF_CLIENT_ID])
@@ -84,19 +84,19 @@ class SetupConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_create_entry(title="ecowatt by RTE", data=self.user_input)
 
     async def async_step_configure_hours_sensor(
-        self, user_input: dict[str, Any] | None = None
+        self, user_input: Optional[dict[str, Any]] = None
     ):
         return self._manual_configuration_step(
             "hours", vol.In(range(4 * 24)), user_input
         )
 
     async def async_step_configure_days_sensor(
-        self, user_input: dict[str, Any] | None = None
+        self, user_input: Optional[dict[str, Any]] = None
     ):
         return self._manual_configuration_step("days", vol.In(range(4)), user_input)
 
     def _manual_configuration_step(
-        self, sensor_unit, validator, user_input: dict[str, Any] | None = None
+        self, sensor_unit, validator, user_input: Optional[dict[str, Any]] = None
     ):
         step_name = f"configure_{sensor_unit}_sensor"
         errors = {}
