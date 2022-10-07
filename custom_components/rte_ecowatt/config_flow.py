@@ -50,6 +50,8 @@ class SetupConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if valid:
                 _LOGGER.debug("Connectivity to RTE api validated")
                 self.user_input = user_input
+                if "sensors" not in self.user_input:
+                    self.user_input["sensors"] = []
 
                 return self._configuration_menu("user")
 
@@ -102,8 +104,6 @@ class SetupConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             vol.Required(CONF_SENSOR_SHIFT): vol.All(vol.Coerce(int), validator),
         }
         if user_input is not None:
-            if "sensors" not in self.user_input:
-                self.user_input["sensors"] = []
             self.user_input["sensors"].append(
                 {
                     CONF_SENSOR_UNIT: sensor_unit,
