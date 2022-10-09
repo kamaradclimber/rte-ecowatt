@@ -5,7 +5,7 @@ Composant pour exposer les niveaux Ecowatt dans un avenir prévisible. Voir http
 ## Installation
 
 Utilisez [hacs](https://hacs.xyz/).
-[![Ouvrez votre instance Home Assistant et ouvrez un référentiel dans la boutique communautaire Home Assistant.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant .io/redirect/hacs_repository/?owner=kamaradclimber&repository=rte-ecowatt)
+[![Ouvrez votre instance Home Assistant et ouvrez un référentiel dans la boutique communautaire Home Assistant.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=kamaradclimber&repository=rte-ecowatt)
 
 ## Configuration
 
