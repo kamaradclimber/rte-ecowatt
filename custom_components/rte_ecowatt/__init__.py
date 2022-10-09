@@ -166,7 +166,7 @@ class NextDowngradedEcowattLevel(CoordinatorEntity, RestorableCoordinatedSensor)
         self._restored = False
         self.hass = hass
         _LOGGER.info("Creating ecowatt sensor for next downgraded period")
-        self._name = "Next downgraded period"
+        self._attr_name = "Next downgraded period"
         self._state = None
         self._attr_extra_state_attributes: Dict[str, Any] = {}
 
