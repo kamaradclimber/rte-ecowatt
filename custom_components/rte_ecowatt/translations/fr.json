@@ -2,38 +2,75 @@
   "config": {
     "step": {
       "user": {
-          "description": "Saisir les identifiants pour accéder à l'API RTE",
-          "data": {
-              "api_client_id": "API Client ID",
-              "api_client_secret": "API Client secret"
-          },
-          "menu_options": {
-            "finish_configuration": "Terminer la configuration et utiliser les capteurs par défaut",
-            "configure_hours_sensor": "Configurer un capteur avec une granularité horaire",
-            "configure_days_sensor": "Configurer un capteur avec une granularité journalière"
-          }
+        "description": "Saisir les identifiants pour accéder à l'API RTE",
+        "data": {
+          "api_client_id": "API Client ID",
+          "api_client_secret": "API Client secret"
+        },
+        "menu_options": {
+          "finish_configuration": "Terminer la configuration et utiliser les capteurs par défaut",
+          "configure_hours_sensor": "Configurer un capteur avec une granularité horaire",
+          "configure_days_sensor": "Configurer un capteur avec une granularité journalière"
+        }
       },
       "configure_hours_sensor": {
-          "description": "Nouveau capteur horaire",
-          "data": {
-              "shift": "Combien d'heures dans le futur ?"
-          },
-          "menu_options": {
-            "finish_configuration": "Terminer la configuration",
-            "configure_hours_sensor": "Configurer un autre capteur avec une granularité horaire",
-            "configure_days_sensor": "Configurer un autre capteur avec une granularité journalière"
-          }
+        "description": "Nouveau capteur horaire",
+        "data": {
+          "shift": "Combien d'heures dans le futur ?"
+        },
+        "menu_options": {
+          "finish_configuration": "Terminer la configuration",
+          "configure_hours_sensor": "Configurer un autre capteur avec une granularité horaire",
+          "configure_days_sensor": "Configurer un autre capteur avec une granularité journalière"
+        }
       },
       "configure_days_sensor": {
-          "description": "Nouveau capteur quotidien",
-          "data": {
-              "shift": "Combien de jours dans le futur ?"
-          },
-          "menu_options": {
-            "finish_configuration": "Terminer la configuration",
-            "configure_hours_sensor": "Configurer un autre capteur avec une granularité horaire",
-            "configure_days_sensor": "Configurer un autre capteur avec une granularité journalière"
-          }
+        "description": "Nouveau capteur quotidien",
+        "data": {
+          "shift": "Combien de jours dans le futur ?"
+        },
+        "menu_options": {
+          "finish_configuration": "Terminer la configuration",
+          "configure_hours_sensor": "Configurer un autre capteur avec une granularité horaire",
+          "configure_days_sensor": "Configurer un autre capteur avec une granularité journalière"
+        }
+      }
+    },
+    "error": {
+      "auth_error": "L'authentification a échoué, les informations d'identification doivent être invalides",
+      "generic_error": "La connexion à l'api RTE a échoué pour une raison inconnue"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "menu_options": {
+          "finish_configuration": "Terminer la configuration",
+          "configure_hours_sensor": "Configurer un autre capteur avec une granularité horaire",
+          "configure_days_sensor": "Configurer un autre capteur avec une granularité journalière"
+        }
+      },
+      "configure_hours_sensor": {
+        "description": "Nouveau capteur horaire",
+        "data": {
+          "shift": "Combien d'heures dans le futur ?"
+        },
+        "menu_options": {
+          "finish_configuration": "Terminer la configuration",
+          "configure_hours_sensor": "Configurer un autre capteur avec une granularité horaire",
+          "configure_days_sensor": "Configurer un autre capteur avec une granularité journalière"
+        }
+      },
+      "configure_days_sensor": {
+        "description": "Nouveau capteur quotidien",
+        "data": {
+          "shift": "Combien de jours dans le futur ?"
+        },
+        "menu_options": {
+          "finish_configuration": "Terminer la configuration",
+          "configure_hours_sensor": "Configurer un autre capteur avec une granularité horaire",
+          "configure_days_sensor": "Configurer un autre capteur avec une granularité journalière"
+        }
       }
     },
     "error": {
