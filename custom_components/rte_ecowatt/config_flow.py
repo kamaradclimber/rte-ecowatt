@@ -5,6 +5,8 @@ from oauthlib.oauth2 import rfc6749
 
 from homeassistant import config_entries
 import homeassistant.helpers.config_validation as cv
+from homeassistant.core import callback
+from homeassistant.data_entry_flow import AbortFlow, FlowResult
 
 from .const import DOMAIN
 from .const import (
@@ -80,6 +82,86 @@ class SetupConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         _LOGGER.info(f"Configuration from user is finished, input is {self.user_input}")
         await self.async_set_unique_id(self.user_input[CONF_CLIENT_ID])
         self._abort_if_unique_id_configured()
+        # will call async_setup_entry defined in __init__.py file
+        return self.async_create_entry(title="ecowatt by RTE", data=self.user_input)
+
+    async def async_step_configure_hours_sensor(
+        self, user_input: Optional[dict[str, Any]] = None
+    ):
+        return self._manual_configuration_step(
+            "hours", vol.In(range(4 * 24)), user_input
+        )
+
+    async def async_step_configure_days_sensor(
+        self, user_input: Optional[dict[str, Any]] = None
+    ):
+        return self._manual_configuration_step("days", vol.In(range(4)), user_input)
+
+    def _manual_configuration_step(
+        self, sensor_unit, validator, user_input: Optional[dict[str, Any]] = None
+    ):
+        step_name = f"configure_{sensor_unit}_sensor"
+        errors = {}
+        data_schema = {
+            vol.Required(CONF_SENSOR_SHIFT): vol.All(vol.Coerce(int), validator),
+        }
+        if user_input is not None:
+            self.user_input["sensors"].append(
+                {
+                    CONF_SENSOR_UNIT: sensor_unit,
+                    CONF_SENSOR_SHIFT: user_input[CONF_SENSOR_SHIFT],
+                }
+            )
+            return self._configuration_menu(step_name)
+
+        return self.async_show_form(
+            step_id=step_name,
+            data_schema=vol.Schema(data_schema),
+            errors=errors,
+        )
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(
+        config_entry: config_entries.ConfigEntry,
+    ) -> config_entries.OptionsFlow:
+        """Create the options flow."""
+        return OptionsFlowHandler(config_entry)
+
+
+# FIXME(g.seux): This class is mostly a duplicate from the SetupConfigFlow. How can we make it common
+class OptionsFlowHandler(config_entries.OptionsFlow):
+    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+        """Initialize options flow."""
+        self.config_entry = config_entry
+        self.user_input = None
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Manage the options."""
+
+        if self.user_input is None:  # done once, feed user_input with existing sensors
+            self.user_input: dict[
+                str, Any
+            ] = self.config_entry.data  # casting is a bit brutal but works
+
+        return self._configuration_menu("init")
+
+    def _configuration_menu(self, step_id: str):
+        return self.async_show_menu(
+            step_id=step_id,
+            menu_options=[
+                "finish_configuration",
+                "configure_hours_sensor",
+                "configure_days_sensor",
+            ],
+        )
+
+    async def async_step_finish_configuration(
+        self, user_input: Optional[dict[str, Any]] = None
+    ):
+        _LOGGER.info(f"Configuration from user is finished, input is {self.user_input}")
         # will call async_setup_entry defined in __init__.py file
         return self.async_create_entry(title="ecowatt by RTE", data=self.user_input)
 
