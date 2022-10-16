@@ -1,6 +1,5 @@
 {
   "codeowners": ["@kamaradclimber"],
-  "config_flow": false,
   "requirements": [
     "Async-OAuthlib==0.0.9"
   ],
