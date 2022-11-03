@@ -137,7 +137,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         self.user_input = None
 
     async def async_step_init(
-        self, user_input: dict[str, Any] | None = None
+        self, user_input: Optional[dict[str, Any]] = None
     ) -> FlowResult:
         """Manage the options."""
 
