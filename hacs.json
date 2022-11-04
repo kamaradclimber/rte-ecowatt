@@ -1,5 +1,6 @@
 {
   "name": "My EcoWatt by RTE",
   "render_readme": true,
-  "country": "fr"
+  "country": "fr",
+  "homeassistant": "2022.11"
 }
