@@ -2,6 +2,7 @@ import os
 import json
 import logging
 from datetime import timedelta, datetime
+from zoneinfo import ZoneInfo
 from typing import Any, Dict, Optional, Tuple
 from dateutil import tz
 from itertools import dropwhile, takewhile
@@ -113,6 +114,24 @@ class EcoWattAPICoordinator(DataUpdateCoordinator):
         self.token = client.token
         return client
 
+    def _timezone(self):
+        timezone = self.hass.config.as_dict()["time_zone"]
+        return tz.gettz(timezone)
+
+    def skip_refresh(self) -> Optional[str]:
+        """
+        Returns a string describing the reason to skip data refresh or None otherwise
+        """
+        now = datetime.now(tz=self._timezone())
+        maintenances = [
+            [datetime(2022, 11, 30, 4, 15, 00, tzinfo=ZoneInfo("Europe/Paris")), timedelta(hours=1)],
+            [datetime(2022, 12, 6, 4, 15, 00, tzinfo=ZoneInfo("Europe/Paris")), timedelta(hours=1)],
+        ]
+        for maintenance in maintenances:
+            if now >= maintenance[0] and now < maintenance[0] + maintenance[1]:
+                return f"Planned RTE API maintenance is happening until {maintenance[1]}"
+        return None
+
     async def update_method(self):
         """Fetch data from API endpoint.
 
@@ -128,6 +147,9 @@ class EcoWattAPICoordinator(DataUpdateCoordinator):
                     "Failing update on purpose to test state restoration"
                 )
             _LOGGER.debug("Starting collecting data")
+            if self.skip_refresh():
+                _LOGGER.warning(f"Skipping data refresh because: {self.skip_refresh()}")
+                return self.data
             client = await self.async_oauth_client()
             headers = {
                 "Authorization": f"{self.token['token_type']} {self.token['access_token']}"
