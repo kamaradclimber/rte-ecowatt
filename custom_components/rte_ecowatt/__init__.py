@@ -190,16 +190,25 @@ class RestorableCoordinatedSensor(RestoreSensor):
     def restored(self):
         return self._restored
 
+    def restore_even_if_unknown(self):
+        return False
+
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
         _LOGGER.debug("starting to restore sensor from previous data")
         if (last_stored_state := await self._async_get_restored_data()) is not None:
             old_state = last_stored_state.state.as_dict()
-            _LOGGER.debug(f"restored state: {old_state}")
-            self._state = old_state["state"]
-            for key, value in old_state["attributes"].items():
-                self._attr_extra_state_attributes[key] = value
-            self.coordinator.last_update_success = True
+            _LOGGER.debug(f"old state: {old_state}")
+            if old_state["state"] != "unknown" or self.restore_even_if_unknown():
+                _LOGGER.debug(f"Restoring state for {self.unique_id}")
+                self._state = old_state["state"]
+                for key, value in old_state["attributes"].items():
+                    self._attr_extra_state_attributes[key] = value
+                self.coordinator.last_update_success = True
+            else:
+                # by not restoring state, we allow the Coordinator to fetch data again and fill
+                # data as soon as possible
+                _LOGGER.debug(f"Stored state was 'unknown', starting from scratch")
         # signal restoration happened
         self._restored = True
 
@@ -252,6 +261,11 @@ class NextDowngradedEcowattLevel(CoordinatorEntity, RestorableCoordinatedSensor)
     @property
     def device_class(self) -> str:
         return "timestamp"
+
+    def restore_even_if_unknown(self):
+        # This sensor is expected to be unknown most of the time
+        # it makes no sense not to restore it if its previous value was unknown
+        return True
 
     def _find_next_downgraded_period(self) -> Optional[Tuple[datetime, datetime]]:
         now = datetime.now(self._timezone())
