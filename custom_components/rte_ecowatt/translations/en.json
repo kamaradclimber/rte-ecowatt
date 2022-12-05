@@ -8,31 +8,7 @@
           "api_client_secret": "API Client secret"
         },
         "menu_options": {
-          "finish_configuration": "Finish configuration and use default sensors",
-          "configure_hours_sensor": "Configure a sensor with hour granularity",
-          "configure_days_sensor": "Configure a sensor with day granularity"
-        }
-      },
-      "configure_hours_sensor": {
-        "description": "New hourly sensor",
-        "data": {
-          "shift": "How many hours in the future?"
-        },
-        "menu_options": {
-          "finish_configuration": "Finish configuration",
-          "configure_hours_sensor": "Configure another sensor with hour granularity",
-          "configure_days_sensor": "Configure another sensor with day granularity"
-        }
-      },
-      "configure_days_sensor": {
-        "description": "New daily sensor",
-        "data": {
-          "shift": "How many days in the future?"
-        },
-        "menu_options": {
-          "finish_configuration": "Finish configuration",
-          "configure_hours_sensor": "Configure another sensor with hour granularity",
-          "configure_days_sensor": "Configure another sensor with day granularity"
+          "finish_configuration": "Finish configuration and use default sensors"
         }
       }
     },
@@ -47,7 +23,20 @@
         "menu_options": {
           "finish_configuration": "Finish configuration",
           "configure_hours_sensor": "Configure another sensor with hour granularity",
-          "configure_days_sensor": "Configure another sensor with day granularity"
+          "configure_days_sensor": "Configure another sensor with day granularity",
+          "enable_load_shedding_announcements": "Look for load shedding announcements"
+        }
+      },
+      "enable_load_shedding_announcements": {
+        "description": "Expose information about planned load shedding",
+        "data": {
+          "enedis_load_shedding": "Fetch load shedding information from enedis. I understand my HA instance latitude/longitude will be sent to api-adresse.data.gouv.fr to detect my address."
+        },
+        "menu_options": {
+          "finish_configuration": "Finish configuration",
+          "configure_hours_sensor": "Configure sensor with hour granularity",
+          "configure_days_sensor": "Configure sensor with day granularity",
+          "enable_load_shedding_announcements": "Look for load shedding announcements"
         }
       },
       "configure_hours_sensor": {
@@ -58,7 +47,8 @@
         "menu_options": {
           "finish_configuration": "Finish configuration",
           "configure_hours_sensor": "Configure another sensor with hour granularity",
-          "configure_days_sensor": "Configure another sensor with day granularity"
+          "configure_days_sensor": "Configure another sensor with day granularity",
+          "enable_load_shedding_announcements": "Look for load shedding announcements"
         }
       },
       "configure_days_sensor": {
@@ -69,7 +59,8 @@
         "menu_options": {
           "finish_configuration": "Finish configuration",
           "configure_hours_sensor": "Configure another sensor with hour granularity",
-          "configure_days_sensor": "Configure another sensor with day granularity"
+          "configure_days_sensor": "Configure another sensor with day granularity",
+          "enable_load_shedding_announcements": "Look for load shedding announcements"
         }
       }
     },

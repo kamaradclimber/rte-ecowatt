@@ -12,6 +12,8 @@ from .const import DOMAIN
 from .const import (
     CONF_CLIENT_ID,
     CONF_CLIENT_SECRET,
+    CONF_SENSORS,
+    CONF_ENEDIS_LOAD_SHEDDING,
     CONF_SENSOR_UNIT,
     CONF_SENSOR_SHIFT,
 )
@@ -29,6 +31,8 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class SetupConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+    VERSION = 2
+
     async def async_step_user(self, user_input: Optional[dict[str, Any]] = None):
         """Called once with None as user_input, then a second time with user provided input"""
         errors = {}
@@ -54,6 +58,8 @@ class SetupConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 self.user_input = user_input
                 if "sensors" not in self.user_input:
                     self.user_input["sensors"] = []
+                if CONF_ENEDIS_LOAD_SHEDDING not in self.user_input:
+                    self.user_input[CONF_ENEDIS_LOAD_SHEDDING] = [False]
 
                 return self._configuration_menu("user")
 
@@ -71,8 +77,6 @@ class SetupConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id=step_id,
             menu_options=[
                 "finish_configuration",
-                "configure_hours_sensor",
-                "configure_days_sensor",
             ],
         )
 
@@ -84,41 +88,6 @@ class SetupConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._abort_if_unique_id_configured()
         # will call async_setup_entry defined in __init__.py file
         return self.async_create_entry(title="ecowatt by RTE", data=self.user_input)
-
-    async def async_step_configure_hours_sensor(
-        self, user_input: Optional[dict[str, Any]] = None
-    ):
-        return self._manual_configuration_step(
-            "hours", vol.In(range(4 * 24)), user_input
-        )
-
-    async def async_step_configure_days_sensor(
-        self, user_input: Optional[dict[str, Any]] = None
-    ):
-        return self._manual_configuration_step("days", vol.In(range(4)), user_input)
-
-    def _manual_configuration_step(
-        self, sensor_unit, validator, user_input: Optional[dict[str, Any]] = None
-    ):
-        step_name = f"configure_{sensor_unit}_sensor"
-        errors = {}
-        data_schema = {
-            vol.Required(CONF_SENSOR_SHIFT): vol.All(vol.Coerce(int), validator),
-        }
-        if user_input is not None:
-            self.user_input["sensors"].append(
-                {
-                    CONF_SENSOR_UNIT: sensor_unit,
-                    CONF_SENSOR_SHIFT: user_input[CONF_SENSOR_SHIFT],
-                }
-            )
-            return self._configuration_menu(step_name)
-
-        return self.async_show_form(
-            step_id=step_name,
-            data_schema=vol.Schema(data_schema),
-            errors=errors,
-        )
 
     @staticmethod
     @callback
@@ -155,7 +124,26 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 "finish_configuration",
                 "configure_hours_sensor",
                 "configure_days_sensor",
+                "enable_load_shedding_announcements",
             ],
+        )
+
+    async def async_step_enable_load_shedding_announcements(
+        self, user_input: Optional[dict[str, Any]] = None
+    ):
+        step_name = f"enable_load_shedding_announcements"
+        errors = {}
+        data_schema = {
+            vol.Required(CONF_ENEDIS_LOAD_SHEDDING): vol.Coerce(bool)
+        }
+        if user_input is not None:
+            self.user_input[CONF_ENEDIS_LOAD_SHEDDING][0] = user_input[CONF_ENEDIS_LOAD_SHEDDING]
+            return self._configuration_menu(step_name)
+
+        return self.async_show_form(
+            step_id=step_name,
+            data_schema=vol.Schema(data_schema),
+            errors=errors,
         )
 
     async def async_step_finish_configuration(

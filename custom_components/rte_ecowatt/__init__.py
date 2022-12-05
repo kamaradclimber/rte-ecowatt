@@ -1,5 +1,7 @@
 import os
+import re
 import json
+import urllib.parse
 import logging
 from datetime import timedelta, datetime
 from zoneinfo import ZoneInfo
@@ -20,11 +22,13 @@ from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
     UpdateFailed,
 )
+from homeassistant.helpers.httpx_client import get_async_client
 from homeassistant.components.sensor import RestoreSensor
 
 from .const import (
     CONF_CLIENT_ID,
     CONF_CLIENT_SECRET,
+    CONF_ENEDIS_LOAD_SHEDDING,
     TOKEN_URL,
     BASE_URL,
     ATTR_LEVEL_CODE,
@@ -46,8 +50,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})
 
     # here we store the coordinator for future access
-    coordinator = EcoWattAPICoordinator(hass, dict(entry.data))
-    hass.data[DOMAIN][entry.entry_id] = coordinator
+    if entry.entry_id not in hass.data[DOMAIN]:
+        hass.data[DOMAIN][entry.entry_id] = {}
+    hass.data[DOMAIN][entry.entry_id]["rte_coordinator"] = EcoWattAPICoordinator(
+        hass, dict(entry.data)
+    )
+    hass.data[DOMAIN][entry.entry_id]["enedis_coordinator"] = EnedisAPICoordinator(
+        hass, dict(entry.data)
+    )
 
     # will make sure async_setup_entry from sensor.py is called
     hass.config_entries.async_setup_platforms(entry, [Platform.SENSOR])
@@ -124,12 +134,20 @@ class EcoWattAPICoordinator(DataUpdateCoordinator):
         """
         now = datetime.now(tz=self._timezone())
         maintenances = [
-            [datetime(2022, 11, 30, 4, 15, 00, tzinfo=ZoneInfo("Europe/Paris")), timedelta(hours=1)],
-            [datetime(2022, 12, 6, 4, 15, 00, tzinfo=ZoneInfo("Europe/Paris")), timedelta(hours=1)],
+            [
+                datetime(2022, 11, 30, 4, 15, 00, tzinfo=ZoneInfo("Europe/Paris")),
+                timedelta(hours=1),
+            ],
+            [
+                datetime(2022, 12, 6, 4, 15, 00, tzinfo=ZoneInfo("Europe/Paris")),
+                timedelta(hours=1),
+            ],
         ]
         for maintenance in maintenances:
             if now >= maintenance[0] and now < maintenance[0] + maintenance[1]:
-                return f"Planned RTE API maintenance is happening until {maintenance[1]}"
+                return (
+                    f"Planned RTE API maintenance is happening until {maintenance[1]}"
+                )
         return None
 
     async def update_method(self):
@@ -456,3 +474,211 @@ class DailyEcowattLevel(AbstractEcowattLevel):
             raise RuntimeError(
                 f"Unable to find ecowatt level for {relevant_date.date()}"
             )
+
+
+class EnedisAPICoordinator(DataUpdateCoordinator):
+    """A coordinator to fetch data from the api only once"""
+
+    def __init__(self, hass, config: ConfigType):
+        super().__init__(
+            hass,
+            _LOGGER,
+            name="enedis api",  # for logging purpose
+            update_method=self.update_method,
+        )
+        self.config = config
+        self.hass = hass
+        self._async_client = None
+
+    async def async_client(self):
+        if not self._async_client:
+            self._async_client = get_async_client(self.hass, verify_ssl=True)
+        return self._async_client
+
+    def _timezone(self):
+        timezone = self.hass.config.as_dict()["time_zone"]
+        return tz.gettz(timezone)
+
+    async def fetch_street_and_insee_code(self) -> Tuple[str,str]:
+        client = await self.async_client()
+        if 'ECOWATT_DEBUG' in os.environ:
+            lat = 48.841
+            lon = 2.3332
+        else:
+            lat = self.hass.config.as_dict()['latitude']
+            lon = self.hass.config.as_dict()['longitude']
+        r = await client.get(f"https://api-adresse.data.gouv.fr/reverse/?lat={lat}&lon={lon}")
+        if not r.is_success:
+            raise UpdateFailed("Failed to fetch address from api-adresse.data.gouv.fr api")
+        data = r.json()
+        _LOGGER.debug(f"Data received from api-adresse.data.gouv.fr: {data}")
+        if len(data["features"]) == 0:
+            _LOGGER.warn(f"Data received from api-adresse.data.gouv.fr is empty for those coordinates: ({lat}, {lon}). Are you sure they are located in France?")
+            raise UpdateFailed("Impossible to find approximate address of the current HA instance")
+        properties = data["features"][0]["properties"]
+        return (properties["street"], properties["citycode"])
+
+    async def update_method(self):
+        """Fetch data from API endpoint."""
+        try:
+            _LOGGER.debug(
+                f"Calling update method, {len(self._listeners)} listeners subscribed"
+            )
+            if "ENEDIS_APIFAIL" in os.environ:
+                raise UpdateFailed(
+                    "Failing update on purpose to test state restoration"
+                )
+            _LOGGER.debug("Starting collecting data")
+            client = await self.async_client()
+
+            r = await client.get(
+                "https://megacache.p.web-enedis.fr/anon/v2/shedding/state_js"
+            )
+            if not r.is_success:
+                _LOGGER.warn(
+                    f"Failure to fetch data from /shedding/state_js endpoint: {r.text}"
+                )
+                raise UpdateFailed("Failed fetching enedis data at step 1")
+            match = re.search(r"^.+var xtick0\s*=\s*'(.+)'.*$", r.text)
+            if not match:
+                raise UpdateFailed(f"Impossible to find expected data in {r.text}")
+            step = match.groups()[0]
+
+            r = await client.post(
+                "https://megacache.p.web-enedis.fr/v2/g/trace", json={"step": step}
+            )
+            if not r.is_success:
+                _LOGGER.warn(
+                    f"Failure to fetch data from /v2/g/trace endpoint: {r.text}"
+                )
+                raise UpdateFailed("Failed fetching enedis data at step 2")
+            jwt_token = r.json()["token"]
+            _LOGGER.debug(f"Fetched token {jwt_token} from enedis api")
+
+            (street, city_code) = await self.fetch_street_and_insee_code()
+            encoded_street = urllib.parse.quote_plus(street)
+
+            url = f"https://megacache.p.web-enedis.fr/v2/shedding?street={encoded_street}&insee_code={city_code}"
+            _LOGGER.debug(f"Requesting shedding from {url}")
+            r = await client.get(url,
+                headers={"Authorization": f"Bearer {jwt_token}"},
+            )
+            if not r.is_success:
+                _LOGGER.warn(f"Failure to fetch data from /v2/shedding: {r.text}")
+                raise UpdateFailed("Failed fetching enedis data at step 3")
+            data = r.json()
+            if "ECOWATT_DEBUG" in os.environ:
+                # TODO: show a real example of shedding
+                data = {"success": True, "eld": False, "shedding": []}
+            _LOGGER.debug(f"Data fetched from enedis: {data}")
+            if not data["success"]:
+                raise UpdateFailed("Enedis API answered success: false at step 4")
+            for shedding_event in data["shedding"]:
+                shedding_event["start_date"] = datetime.strptime(
+                    shedding_event["start_date"], "%Y-%m-%dT%H:%M:%S%z"
+                )
+                shedding_event["stop_date"] = datetime.strptime(
+                    shedding_event["stop_date"], "%Y-%m-%dT%H:%M:%S%z"
+                )
+                shedding_event["refresh_date"] = datetime.strptime(
+                    shedding_event["refresh_date"], "%Y-%m-%dT%H:%M:%S%z"
+                )
+            return data
+        except Exception as err:
+            raise UpdateFailed(f"Error communicating with API: {err}")
+
+
+class EnedisNextDowngradedPeriod(CoordinatorEntity, RestorableCoordinatedSensor):
+    """Expose next downgraded period for Enedis"""
+
+    def __init__(self, coordinator: EnedisAPICoordinator, hass: HomeAssistant):
+        super().__init__(coordinator)
+        self._restored = False
+        self.hass = hass
+        _LOGGER.info("Creating enedis sensor for next downgraded period")
+        self._attr_name = "Next load shedding"
+        self._state = None
+        self._attr_extra_state_attributes: Dict[str, Any] = {}
+
+    @property
+    def unique_id(self) -> str:
+        return f"enedis-next-downgraded-period"
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        if not self.coordinator.last_update_success:
+            _LOGGER.debug("Last coordinator failed, assuming state has not changed")
+            return
+        optional_period = self._find_next_downgraded_period()
+        if not optional_period:
+            optional_period = (None, None)
+        (period_start, period_end) = optional_period
+        previous_state = self._state
+        previous_end = self._attr_extra_state_attributes.get(ATTR_PERIOD_END, None)
+        self._state = period_start
+        self._attr_extra_state_attributes[ATTR_PERIOD_END] = period_end
+
+        if (self._state, self._attr_extra_state_attributes[ATTR_PERIOD_END]) != (
+            previous_state,
+            previous_end,
+        ):
+            _LOGGER.info(f"updated '{self.name}'")
+        self.async_write_ha_state()
+
+    @property
+    def state(self) -> Optional[datetime]:
+        return self._state
+
+    @property
+    def native_value(self) -> Optional[datetime]:
+        return self._state
+
+    @property
+    def device_class(self) -> str:
+        return "timestamp"
+
+    def restore_even_if_unknown(self):
+        # This sensor is expected to be unknown most of the time
+        # it makes no sense not to restore it if its previous value was unknown
+        return True
+
+    def _find_next_downgraded_period(self) -> Optional[Tuple[datetime, datetime]]:
+        now = datetime.now(self._timezone())
+        if self.coordinator.data["eld"]:
+            _LOGGER.warn(
+                f"Current location is served by a local-distribution company (ELD). Enedis does not provide data about it"
+            )
+            return None
+
+        _LOGGER.debug(
+            f"Enedis returned {len(self.coordinator.data['shedding'])} shedding events"
+        )
+
+        next_shedding_event = None
+        for shedding_event in self.coordinator.data["shedding"]:
+            if shedding_event["stop_date"] < now:
+                continue
+            if (
+                next_shedding_event is None
+                or shedding_event["start_date"] < next_shedding_event["start_date"]
+            ):
+                next_shedding_event = shedding_event
+        if next_shedding_event:
+            return (next_shedding_event["start_date"], next_shedding_event["stop_date"])
+        return None
+
+    def _timezone(self):
+        timezone = self.hass.config.as_dict()["time_zone"]
+        return tz.gettz(timezone)
+
+    pass
+
+async def async_migrate_entry(hass, config_entry: ConfigEntry):
+    if config_entry.version == 1:
+        _LOGGER.warn(f"config_entry version is {config_entry.version}, migrating to version 2")
+        new = {**config_entry.data}
+        new[CONF_ENEDIS_LOAD_SHEDDING] = [False]
+        config_entry.version = 2
+        hass.config_entries.async_update_entry(config_entry, data=new)
+        _LOGGER.info(f"Migration to version {config_entry.version} successful")
+    return True
