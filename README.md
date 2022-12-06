@@ -2,6 +2,9 @@
 
 Composant pour exposer les niveaux Ecowatt dans un avenir prévisible. Voir https://www.monecowatt.fr/ pour l'accès web.
 
+L'intégration expose également optionellement des informations sur les délestages locaux via le site d'Enedis.
+Cette fonctionnalité est désactivée par défaut car elle partage des information de localisation avec un site tiers. Elle peut-être configurée dans la page /config/integrations en cliquant sur "Configurer".
+
 ## Installation
 
 Utilisez [hacs](https://hacs.xyz/).
