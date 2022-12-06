@@ -17,6 +17,7 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
     DataUpdateCoordinator,
@@ -597,6 +598,42 @@ class EnedisAPICoordinator(DataUpdateCoordinator):
             raise UpdateFailed(f"Error communicating with API: {err}")
 
 
+class ElectricityDistributorEntity(CoordinatorEntity, RestorableCoordinatedSensor):
+    """Exposes type of electricity distribution (via Enedis or ELD)"""
+
+    def __init__(self, coordinator: EnedisAPICoordinator, hass: HomeAssistant):
+        super().__init__(coordinator)
+        self._restored = False
+        self.hass = hass
+        self._attr_name = "Electricity distributor"
+        self._state = None
+        self._attr_extra_state_attributes: Dict[str, Any] = {}
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    @property
+    def unique_id(self) -> str:
+        return f"enedis-electricity-distributor"
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        if not self.coordinator.last_update_success:
+            _LOGGER.debug("Last coordinator failed, assuming state has not changed")
+            return
+        if self.coordinator.data["eld"]:
+            self._state = "Entreprise Locale de Distribution"
+        else:
+            self._state = "Enedis"
+        self.async_write_ha_state()
+
+    @property
+    def state(self) -> Optional[str]:
+        return self._state
+
+    @property
+    def device_info(self):
+        return {"identifiers": {(DOMAIN, "enedis")}, "name": "Enedis"}
+
+
 class EnedisNextDowngradedPeriod(CoordinatorEntity, RestorableCoordinatedSensor):
     """Expose next downgraded period for Enedis"""
 
@@ -680,7 +717,10 @@ class EnedisNextDowngradedPeriod(CoordinatorEntity, RestorableCoordinatedSensor)
         timezone = self.hass.config.as_dict()["time_zone"]
         return tz.gettz(timezone)
 
-    pass
+    @property
+    def device_info(self):
+        return {"identifiers": {(DOMAIN, "enedis")}, "name": "Enedis"}
+
 
 async def async_migrate_entry(hass, config_entry: ConfigEntry):
     if config_entry.version == 1:

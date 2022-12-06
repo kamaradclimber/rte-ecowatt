@@ -20,6 +20,7 @@ from . import (
     DailyEcowattLevel,
     EnedisNextDowngradedPeriod,
     EnedisAPICoordinator,
+    ElectricityDistributorEntity,
 )
 from .const import (
     DOMAIN,
@@ -76,6 +77,7 @@ async def async_setup_entry(
         0
     ]:  # this sensor transmit PII to external provider, it's opt-in
         sensors.append(EnedisNextDowngradedPeriod(enedis_coordinator, hass))
+        sensors.append(ElectricityDistributorEntity(enedis_coordinator, hass))
 
     async_add_entities(sensors)
     while not all(s.restored for s in sensors):
