@@ -499,22 +499,30 @@ class EnedisAPICoordinator(DataUpdateCoordinator):
         timezone = self.hass.config.as_dict()["time_zone"]
         return tz.gettz(timezone)
 
-    async def fetch_street_and_insee_code(self) -> Tuple[str,str]:
+    async def fetch_street_and_insee_code(self) -> Tuple[str, str]:
         client = await self.async_client()
-        if 'ECOWATT_DEBUG' in os.environ:
+        if "ECOWATT_DEBUG" in os.environ:
             lat = 48.841
             lon = 2.3332
         else:
-            lat = self.hass.config.as_dict()['latitude']
-            lon = self.hass.config.as_dict()['longitude']
-        r = await client.get(f"https://api-adresse.data.gouv.fr/reverse/?lat={lat}&lon={lon}")
+            lat = self.hass.config.as_dict()["latitude"]
+            lon = self.hass.config.as_dict()["longitude"]
+        r = await client.get(
+            f"https://api-adresse.data.gouv.fr/reverse/?lat={lat}&lon={lon}"
+        )
         if not r.is_success:
-            raise UpdateFailed("Failed to fetch address from api-adresse.data.gouv.fr api")
+            raise UpdateFailed(
+                "Failed to fetch address from api-adresse.data.gouv.fr api"
+            )
         data = r.json()
         _LOGGER.debug(f"Data received from api-adresse.data.gouv.fr: {data}")
         if len(data["features"]) == 0:
-            _LOGGER.warn(f"Data received from api-adresse.data.gouv.fr is empty for those coordinates: ({lat}, {lon}). Are you sure they are located in France?")
-            raise UpdateFailed("Impossible to find approximate address of the current HA instance")
+            _LOGGER.warn(
+                f"Data received from api-adresse.data.gouv.fr is empty for those coordinates: ({lat}, {lon}). Are you sure they are located in France?"
+            )
+            raise UpdateFailed(
+                "Impossible to find approximate address of the current HA instance"
+            )
         properties = data["features"][0]["properties"]
         return (properties["street"], properties["citycode"])
 
@@ -560,7 +568,8 @@ class EnedisAPICoordinator(DataUpdateCoordinator):
 
             url = f"https://megacache.p.web-enedis.fr/v2/shedding?street={encoded_street}&insee_code={city_code}"
             _LOGGER.debug(f"Requesting shedding from {url}")
-            r = await client.get(url,
+            r = await client.get(
+                url,
                 headers={"Authorization": f"Bearer {jwt_token}"},
             )
             if not r.is_success:
@@ -675,7 +684,9 @@ class EnedisNextDowngradedPeriod(CoordinatorEntity, RestorableCoordinatedSensor)
 
 async def async_migrate_entry(hass, config_entry: ConfigEntry):
     if config_entry.version == 1:
-        _LOGGER.warn(f"config_entry version is {config_entry.version}, migrating to version 2")
+        _LOGGER.warn(
+            f"config_entry version is {config_entry.version}, migrating to version 2"
+        )
         new = {**config_entry.data}
         new[CONF_ENEDIS_LOAD_SHEDDING] = [False]
         config_entry.version = 2

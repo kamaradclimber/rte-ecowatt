@@ -72,7 +72,9 @@ async def async_setup_entry(
             raise Exception("Unknown sensor unit type")
         sensors.append(klass(rte_coordinator, sensor_config[CONF_SENSOR_SHIFT], hass))
 
-    if entry.data[CONF_ENEDIS_LOAD_SHEDDING][0]:  # this sensor transmit PII to external provider, it's opt-in
+    if entry.data[CONF_ENEDIS_LOAD_SHEDDING][
+        0
+    ]:  # this sensor transmit PII to external provider, it's opt-in
         sensors.append(EnedisNextDowngradedPeriod(enedis_coordinator, hass))
 
     async_add_entities(sensors)

@@ -133,11 +133,11 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
     ):
         step_name = f"enable_load_shedding_announcements"
         errors = {}
-        data_schema = {
-            vol.Required(CONF_ENEDIS_LOAD_SHEDDING): vol.Coerce(bool)
-        }
+        data_schema = {vol.Required(CONF_ENEDIS_LOAD_SHEDDING): vol.Coerce(bool)}
         if user_input is not None:
-            self.user_input[CONF_ENEDIS_LOAD_SHEDDING][0] = user_input[CONF_ENEDIS_LOAD_SHEDDING]
+            self.user_input[CONF_ENEDIS_LOAD_SHEDDING][0] = user_input[
+                CONF_ENEDIS_LOAD_SHEDDING
+            ]
             return self._configuration_menu(step_name)
 
         return self.async_show_form(
