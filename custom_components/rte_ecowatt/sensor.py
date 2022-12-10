@@ -15,7 +15,6 @@ from homeassistant.config_entries import ConfigEntry
 
 from . import (
     EcoWattAPICoordinator,
-    NextDowngradedEcowattLevel,
     HourlyEcowattLevel,
     DailyEcowattLevel,
     EnedisAPICoordinator,
@@ -61,7 +60,6 @@ async def async_setup_entry(
     sensors = []
     sensors.append(DailyEcowattLevel(rte_coordinator, 0, hass))
     sensors.append(HourlyEcowattLevel(rte_coordinator, 0, hass))
-    sensors.append(NextDowngradedEcowattLevel(rte_coordinator, hass))
 
     for sensor_config in entry.data[CONF_SENSORS]:
         if sensor_config[CONF_SENSOR_UNIT] == "days":
