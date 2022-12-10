@@ -13,7 +13,7 @@ from async_oauthlib import OAuth2Session
 import aiohttp
 
 
-from homeassistant.const import Platform
+from homeassistant.const import Platform, STATE_ON
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.config_entries import ConfigEntry
@@ -25,6 +25,7 @@ from homeassistant.helpers.update_coordinator import (
 )
 from homeassistant.helpers.httpx_client import get_async_client
 from homeassistant.components.sensor import RestoreSensor
+from homeassistant.components.calendar import CalendarEntity, CalendarEvent
 
 from .const import (
     CONF_CLIENT_ID,
@@ -61,7 +62,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
 
     # will make sure async_setup_entry from sensor.py is called
-    hass.config_entries.async_setup_platforms(entry, [Platform.SENSOR])
+    hass.config_entries.async_setup_platforms(
+        entry, [Platform.SENSOR, Platform.CALENDAR]
+    )
 
     # subscribe to config updates
     entry.async_on_unload(entry.add_update_listener(update_entry))
@@ -83,7 +86,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """This method is called to clean all sensors before re-adding them"""
     _LOGGER.debug("async_unload_entry method called")
     unload_ok = await hass.config_entries.async_unload_platforms(
-        entry, [Platform.SENSOR]
+        entry, [Platform.SENSOR, Platform.CALENDAR]
     )
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id)
@@ -193,10 +196,9 @@ class EcoWattAPICoordinator(DataUpdateCoordinator):
             _LOGGER.debug(f"api response body: {body}")
             signals = json.loads(body)["signals"]
             for day_data in signals:
-                parsed_date = datetime.strptime(
-                    day_data["jour"], "%Y-%m-%dT%H:%M:%S%z"
-                ).date()
-                day_data["date"] = parsed_date
+                parsed_time = datetime.strptime(day_data["jour"], "%Y-%m-%dT%H:%M:%S%z")
+                day_data["date"] = parsed_time.date()
+                day_data["datetime"] = parsed_time
 
             _LOGGER.debug(f"data parsed: {signals}")
             return signals
@@ -230,6 +232,89 @@ class RestorableCoordinatedSensor(RestoreSensor):
                 _LOGGER.debug(f"Stored state was 'unknown', starting from scratch")
         # signal restoration happened
         self._restored = True
+
+
+class DowngradedEcowattLevelCalendar(
+    CoordinatorEntity, RestorableCoordinatedSensor, CalendarEntity
+):
+    def __init__(self, coordinator: EcoWattAPICoordinator, hass: HomeAssistant):
+        CoordinatorEntity.__init__(self, coordinator)
+        self._restored = False
+        self.hass = hass
+        self._attr_name = "Ecowatt downgraded level calendar"
+        self._events = []
+
+    @property
+    def event(self) -> CalendarEvent | None:
+        if len(self._events) > 0:
+            self._events[0]
+        return None
+
+    @property
+    def unique_id(self) -> str:
+        return f"ecowatt-downgraded-events"
+
+    async def async_get_events(
+        self, hass: HomeAssistant, start_date: datetime, end_date: datetime
+    ) -> list[CalendarEvent]:
+        relevant_events = []
+        for event in self._events:
+            included = event.start <= start_date and event.end >= end_date
+            included = included or (
+                event.start >= start_date and event.start <= end_date
+            )
+            included = included or (event.end >= start_date and event.end <= end_date)
+            if included:
+                relevant_events.append(event)
+        return relevant_events
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        if not self.coordinator.last_update_success:
+            _LOGGER.debug("Last coordinator failed, assuming state has not changed")
+            return
+        events = []
+        for event in self.coordinator.data:
+            day_start = event["datetime"]
+            for hour in event["values"]:
+                start = day_start + timedelta(hours=hour["pas"])
+                if hour["hvalue"] > 1:
+                    events.append(
+                        CalendarEvent(
+                            start=start,
+                            end=start + timedelta(hours=1),
+                            summary=self._level2string(hour["hvalue"]),
+                            description=f"Le niveau ecowatt prévu est {hour['hvalue']}",
+                        )
+                    )
+
+        self._events = self._merge_events(events)
+        self.async_write_ha_state()  # we probably don't need this line
+
+    def _merge_events(self, events: list[CalendarEvent]) -> list[CalendarEvent]:
+        events.sort(key=lambda e: e.start)
+        if len(events) == 0:
+            return []
+        merged_events = [events[0]]
+        for event in events[1:]:
+            if (
+                event.start == merged_events[-1].end
+                and event.summary == merged_events[-1].summary
+                and event.description == merged_events[-1].description
+            ):
+                merged_events[-1].end = event.end
+            else:
+                merged_events.append(event)
+        return merged_events
+
+    def _level2string(self, level):
+        if self.state == STATE_ON and level == 3:
+            return "Coupure d'électricité en cours"
+        return {
+            1: "Situation normale",
+            2: "Risques de coupures d'électricité",
+            3: "Coupures d'électricité programmées",
+        }[level]
 
 
 class NextDowngradedEcowattLevel(CoordinatorEntity, RestorableCoordinatedSensor):
