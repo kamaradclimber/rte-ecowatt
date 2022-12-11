@@ -238,7 +238,7 @@ class DowngradedEcowattLevelCalendar(CoordinatorEntity, CalendarEntity):
     def __init__(self, coordinator: EcoWattAPICoordinator, hass: HomeAssistant):
         CoordinatorEntity.__init__(self, coordinator)
         self.hass = hass
-        self._attr_name = "Ecowatt downgraded level calendar"
+        self._attr_name = "Ecowatt downgraded level"
         self._events = []
 
     @property
