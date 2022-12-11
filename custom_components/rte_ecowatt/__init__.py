@@ -234,12 +234,9 @@ class RestorableCoordinatedSensor(RestoreSensor):
         self._restored = True
 
 
-class DowngradedEcowattLevelCalendar(
-    CoordinatorEntity, RestorableCoordinatedSensor, CalendarEntity
-):
+class DowngradedEcowattLevelCalendar(CoordinatorEntity, CalendarEntity):
     def __init__(self, coordinator: EcoWattAPICoordinator, hass: HomeAssistant):
         CoordinatorEntity.__init__(self, coordinator)
-        self._restored = False
         self.hass = hass
         self._attr_name = "Ecowatt downgraded level calendar"
         self._events = []
@@ -719,88 +716,83 @@ class ElectricityDistributorEntity(CoordinatorEntity, RestorableCoordinatedSenso
         return {"identifiers": {(DOMAIN, "enedis")}, "name": "Enedis"}
 
 
-class EnedisNextDowngradedPeriod(CoordinatorEntity, RestorableCoordinatedSensor):
-    """Expose next downgraded period for Enedis"""
+class EnedisNextDowngradedPeriods(CoordinatorEntity, CalendarEntity):
+    """Expose downgraded periods for Enedis"""
 
     def __init__(self, coordinator: EnedisAPICoordinator, hass: HomeAssistant):
-        super().__init__(coordinator)
-        self._restored = False
+        CoordinatorEntity.__init__(self, coordinator)
         self.hass = hass
-        _LOGGER.info("Creating enedis sensor for next downgraded period")
-        self._attr_name = "Next load shedding"
-        self._state = None
-        self._attr_extra_state_attributes: Dict[str, Any] = {}
+        self._attr_name = "Next load sheddings"
+        self._events = []
 
     @property
     def unique_id(self) -> str:
-        return f"enedis-next-downgraded-period"
+        return f"enedis-next-downgraded-periods"
+
+    @property
+    def event(self) -> CalendarEvent | None:
+        if len(self._events) > 0:
+            self._events[0]
+        return None
+
+    async def async_get_events(
+        self, hass: HomeAssistant, start_date: datetime, end_date: datetime
+    ) -> list[CalendarEvent]:
+        relevant_events = []
+        for event in self._events:
+            included = event.start <= start_date and event.end >= end_date
+            included = included or (
+                event.start >= start_date and event.start <= end_date
+            )
+            included = included or (event.end >= start_date and event.end <= end_date)
+            if included:
+                relevant_events.append(event)
+        return relevant_events
 
     @callback
     def _handle_coordinator_update(self) -> None:
         if not self.coordinator.last_update_success:
             _LOGGER.debug("Last coordinator failed, assuming state has not changed")
             return
-        optional_period = self._find_next_downgraded_period()
-        if not optional_period:
-            optional_period = (None, None)
-        (period_start, period_end) = optional_period
-        previous_state = self._state
-        previous_end = self._attr_extra_state_attributes.get(ATTR_PERIOD_END, None)
-        self._state = period_start
-        self._attr_extra_state_attributes[ATTR_PERIOD_END] = period_end
-
-        if (self._state, self._attr_extra_state_attributes[ATTR_PERIOD_END]) != (
-            previous_state,
-            previous_end,
-        ):
-            _LOGGER.info(f"updated '{self.name}'")
-        self.async_write_ha_state()
-
-    @property
-    def state(self) -> Optional[datetime]:
-        return self._state
-
-    @property
-    def native_value(self) -> Optional[datetime]:
-        return self._state
-
-    @property
-    def device_class(self) -> str:
-        return "timestamp"
-
-    def restore_even_if_unknown(self):
-        # This sensor is expected to be unknown most of the time
-        # it makes no sense not to restore it if its previous value was unknown
-        return True
-
-    def _find_next_downgraded_period(self) -> Optional[Tuple[datetime, datetime]]:
-        now = datetime.now(self._timezone())
         if self.coordinator.data["eld"]:
             _LOGGER.warn(
                 f"Current location is served by a local-distribution company (ELD). Enedis does not provide data about it"
             )
-            return None
+            return
 
         _LOGGER.debug(
             f"Enedis returned {len(self.coordinator.data['shedding'])} shedding events"
         )
-
-        next_shedding_event = None
+        events = []
         for shedding_event in self.coordinator.data["shedding"]:
-            if shedding_event["stop_date"] < now:
-                continue
-            if (
-                next_shedding_event is None
-                or shedding_event["start_date"] < next_shedding_event["start_date"]
-            ):
-                next_shedding_event = shedding_event
-        if next_shedding_event:
-            return (next_shedding_event["start_date"], next_shedding_event["stop_date"])
-        return None
+            events.append(
+                CalendarEvent(
+                    start=shedding_event["start_date"],
+                    end=shedding_event["stop_date"],
+                    summary="Delestage prévu par Enedis",
+                    description=f"Coupure d'électricité prévue",
+                )
+            )
+        self._events = events
 
-    def _timezone(self):
-        timezone = self.hass.config.as_dict()["time_zone"]
-        return tz.gettz(timezone)
+        self._events = self._merge_events(events)
+        self.async_write_ha_state()  # we probably don't need this line
+
+    def _merge_events(self, events: list[CalendarEvent]) -> list[CalendarEvent]:
+        events.sort(key=lambda e: e.start)
+        if len(events) == 0:
+            return []
+        merged_events = [events[0]]
+        for event in events[1:]:
+            if (
+                event.start == merged_events[-1].end
+                and event.summary == merged_events[-1].summary
+                and event.description == merged_events[-1].description
+            ):
+                merged_events[-1].end = event.end
+            else:
+                merged_events.append(event)
+        return merged_events
 
     @property
     def device_info(self):

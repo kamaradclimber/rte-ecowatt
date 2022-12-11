@@ -18,7 +18,6 @@ from . import (
     NextDowngradedEcowattLevel,
     HourlyEcowattLevel,
     DailyEcowattLevel,
-    EnedisNextDowngradedPeriod,
     EnedisAPICoordinator,
     ElectricityDistributorEntity,
 )
@@ -76,7 +75,6 @@ async def async_setup_entry(
     if entry.data[CONF_ENEDIS_LOAD_SHEDDING][
         0
     ]:  # this sensor transmit PII to external provider, it's opt-in
-        sensors.append(EnedisNextDowngradedPeriod(enedis_coordinator, hass))
         sensors.append(ElectricityDistributorEntity(enedis_coordinator, hass))
 
     async_add_entities(sensors)
