@@ -14,11 +14,10 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.config_entries import ConfigEntry
 
 from . import (
-    EcoWattAPICoordinator,
     HourlyEcowattLevel,
     DailyEcowattLevel,
-    EnedisAPICoordinator,
     ElectricityDistributorEntity,
+    DetectedAddress,
 )
 from .const import (
     DOMAIN,
@@ -74,6 +73,7 @@ async def async_setup_entry(
         0
     ]:  # this sensor transmit PII to external provider, it's opt-in
         sensors.append(ElectricityDistributorEntity(enedis_coordinator, hass))
+        sensors.append(DetectedAddress(enedis_coordinator, hass))
 
     async_add_entities(sensors)
     while not all(s.restored for s in sensors):

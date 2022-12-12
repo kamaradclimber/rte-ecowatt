@@ -593,6 +593,7 @@ class EnedisAPICoordinator(DataUpdateCoordinator):
                 shedding_event["refresh_date"] = datetime.strptime(
                     shedding_event["refresh_date"], "%Y-%m-%dT%H:%M:%S%z"
                 )
+            data["address"] = { "street": street, "insee_code": city_code }
             return data
         except Exception as err:
             raise UpdateFailed(f"Error communicating with API: {err}")
@@ -728,3 +729,43 @@ async def async_migrate_entry(hass, config_entry: ConfigEntry):
         hass.config_entries.async_update_entry(config_entry, data=new)
         _LOGGER.info(f"Migration to version {config_entry.version} successful")
     return True
+
+class DetectedAddress(CoordinatorEntity, RestorableCoordinatedSensor):
+    """Exposes the address detected from GPS coordinate and sent to Enedis"""
+
+    def __init__(
+        self, coordinator: EnedisAPICoordinator, hass: HomeAssistant
+    ):
+        super().__init__(coordinator)
+        self._restored = False
+        self.hass = hass
+        self._attr_extra_state_attributes: Dict[str, Any] = {}
+        self._attr_name = "Detected address"
+        self._state = None
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        if not self.coordinator.last_update_success:
+            _LOGGER.debug("Last coordinator failed, assuming state has not changed")
+            return
+        data = self.coordinator.data['address']
+        self._state = f"{data['street']} {data['insee_code']}"
+        self.async_write_ha_state()
+
+    @property
+    def state(self) -> Optional[str]:
+        return self._state
+
+    @property
+    def native_value(self):
+        return self._state
+
+    @property
+    def device_info(self):
+        # technically the sensor should belong to a French Governement entity
+        return {"identifiers": {(DOMAIN, "enedis")}, "name": "Enedis"}
+
+    @property
+    def unique_id(self) -> str:
+        return f"enedis-sent-address"
