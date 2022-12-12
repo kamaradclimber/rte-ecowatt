@@ -584,19 +584,17 @@ class EnedisAPICoordinator(DataUpdateCoordinator):
             if not data["success"]:
                 raise UpdateFailed("Enedis API answered success: false at step 4")
             for shedding_event in data["shedding"]:
-                shedding_event["start_date"] = datetime.strptime(
-                    shedding_event["start_date"], "%Y-%m-%dT%H:%M:%S%z"
-                )
-                shedding_event["stop_date"] = datetime.strptime(
-                    shedding_event["stop_date"], "%Y-%m-%dT%H:%M:%S%z"
-                )
-                shedding_event["refresh_date"] = datetime.strptime(
-                    shedding_event["refresh_date"], "%Y-%m-%dT%H:%M:%S%z"
-                )
+                shedding_event["start_date"] = self._parse_enedis_time(shedding_event["start_date"])
+                shedding_event["stop_date"] = self._parse_enedis_time(shedding_event["stop_date"])
+                shedding_event["refresh_date"] = self._parse_enedis_time(shedding_event["refresh_date"])
             data["address"] = { "street": street, "insee_code": city_code }
             return data
         except Exception as err:
             raise UpdateFailed(f"Error communicating with API: {err}")
+
+    def _parse_enedis_time(self, time_string: str) -> datetime:
+        a = datetime.strptime(time_string, "%d/%m/%Y %H:%M")
+        return datetime(a.year, a.month, a.day, a.hour, a.minute, a.second, tzinfo=tz.gettz('Europe/Paris'))
 
 
 class ElectricityDistributorEntity(CoordinatorEntity, RestorableCoordinatedSensor):
