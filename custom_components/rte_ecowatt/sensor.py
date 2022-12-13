@@ -11,6 +11,7 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity import EntityPlatformState
 from homeassistant.config_entries import ConfigEntry
 
 from . import (
@@ -76,8 +77,10 @@ async def async_setup_entry(
         sensors.append(DetectedAddress(enedis_coordinator, hass))
 
     async_add_entities(sensors)
-    while not all(s.restored for s in sensors):
-        _LOGGER.debug("Wait for all sensors to have been restored")
+    while not all(
+        s.restored for s in sensors if s._platform_state == EntityPlatformState.ADDED
+    ):
+        _LOGGER.debug(f"Wait for all {len(sensors)} sensors to have been restored")
         await asyncio.sleep(0.2)
     _LOGGER.debug("All sensors have been restored properly")
 
