@@ -157,7 +157,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         self, user_input: Optional[dict[str, Any]] = None
     ):
         return self._manual_configuration_step(
-            "hours", vol.In(range(4 * 24)), user_input
+            "hours", vol.In(range(3 * 24)), user_input
         )
 
     async def async_step_configure_days_sensor(
