@@ -584,17 +584,31 @@ class EnedisAPICoordinator(DataUpdateCoordinator):
             if not data["success"]:
                 raise UpdateFailed("Enedis API answered success: false at step 4")
             for shedding_event in data["shedding"]:
-                shedding_event["start_date"] = self._parse_enedis_time(shedding_event["start_date"])
-                shedding_event["stop_date"] = self._parse_enedis_time(shedding_event["stop_date"])
-                shedding_event["refresh_date"] = self._parse_enedis_time(shedding_event["refresh_date"])
-            data["address"] = { "street": street, "insee_code": city_code }
+                shedding_event["start_date"] = self._parse_enedis_time(
+                    shedding_event["start_date"]
+                )
+                shedding_event["stop_date"] = self._parse_enedis_time(
+                    shedding_event["stop_date"]
+                )
+                shedding_event["refresh_date"] = self._parse_enedis_time(
+                    shedding_event["refresh_date"]
+                )
+            data["address"] = {"street": street, "insee_code": city_code}
             return data
         except Exception as err:
             raise UpdateFailed(f"Error communicating with API: {err}")
 
     def _parse_enedis_time(self, time_string: str) -> datetime:
         a = datetime.strptime(time_string, "%d/%m/%Y %H:%M")
-        return datetime(a.year, a.month, a.day, a.hour, a.minute, a.second, tzinfo=tz.gettz('Europe/Paris'))
+        return datetime(
+            a.year,
+            a.month,
+            a.day,
+            a.hour,
+            a.minute,
+            a.second,
+            tzinfo=tz.gettz("Europe/Paris"),
+        )
 
 
 class ElectricityDistributorEntity(CoordinatorEntity, RestorableCoordinatedSensor):
@@ -728,12 +742,11 @@ async def async_migrate_entry(hass, config_entry: ConfigEntry):
         _LOGGER.info(f"Migration to version {config_entry.version} successful")
     return True
 
+
 class DetectedAddress(CoordinatorEntity, RestorableCoordinatedSensor):
     """Exposes the address detected from GPS coordinate and sent to Enedis"""
 
-    def __init__(
-        self, coordinator: EnedisAPICoordinator, hass: HomeAssistant
-    ):
+    def __init__(self, coordinator: EnedisAPICoordinator, hass: HomeAssistant):
         super().__init__(coordinator)
         self._restored = False
         self.hass = hass
@@ -747,7 +760,7 @@ class DetectedAddress(CoordinatorEntity, RestorableCoordinatedSensor):
         if not self.coordinator.last_update_success:
             _LOGGER.debug("Last coordinator failed, assuming state has not changed")
             return
-        data = self.coordinator.data['address']
+        data = self.coordinator.data["address"]
         self._state = f"{data['street']} {data['insee_code']}"
         self.async_write_ha_state()
 
