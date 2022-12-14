@@ -242,7 +242,7 @@ class DowngradedEcowattLevelCalendar(CoordinatorEntity, CalendarEntity):
         self._events = []
 
     @property
-    def event(self) -> CalendarEvent | None:
+    def event(self) -> Optional[CalendarEvent]:
         if len(self._events) > 0:
             self._events[0]
         return None
@@ -647,7 +647,7 @@ class EnedisNextDowngradedPeriods(CoordinatorEntity, CalendarEntity):
         return f"enedis-next-downgraded-periods"
 
     @property
-    def event(self) -> CalendarEvent | None:
+    def event(self) -> Optional[CalendarEvent]:
         if len(self._events) > 0:
             self._events[0]
         return None
