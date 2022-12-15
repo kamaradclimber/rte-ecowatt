@@ -313,6 +313,10 @@ class DowngradedEcowattLevelCalendar(CoordinatorEntity, CalendarEntity):
             3: "Coupures d'électricité programmées",
         }[level]
 
+    @property
+    def device_info(self):
+        return {"identifiers": {(DOMAIN, "RTE")}, "name": "RTE"}
+
 
 class AbstractEcowattLevel(CoordinatorEntity, RestorableCoordinatedSensor):
     """Representation of ecowatt level for a given day"""
@@ -381,6 +385,10 @@ class AbstractEcowattLevel(CoordinatorEntity, RestorableCoordinatedSensor):
     @property
     def native_value(self):
         return self._state
+
+    @property
+    def device_info(self):
+        return {"identifiers": {(DOMAIN, "RTE")}, "name": "RTE"}
 
 
 class HourlyEcowattLevel(AbstractEcowattLevel):
