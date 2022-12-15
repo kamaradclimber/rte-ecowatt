@@ -607,6 +607,7 @@ class EnedisAPICoordinator(DataUpdateCoordinator):
             raise UpdateFailed(f"Error communicating with API: {err}")
 
     def _parse_enedis_time(self, time_string: str) -> datetime:
+        _LOGGER.debug(f"Trying to parse {time_string}")
         a = datetime.strptime(time_string, "%d/%m/%Y %H:%M")
         return datetime(
             a.year,
