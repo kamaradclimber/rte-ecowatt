@@ -509,7 +509,7 @@ class EnedisAPICoordinator(DataUpdateCoordinator):
             lat = self.hass.config.as_dict()["latitude"]
             lon = self.hass.config.as_dict()["longitude"]
         r = await client.get(
-            f"https://api-adresse.data.gouv.fr/reverse/?lat={lat}&lon={lon}"
+            f"https://api-adresse.data.gouv.fr/reverse/?lat={lat}&lon={lon}&type=street"
         )
         if not r.is_success:
             raise UpdateFailed(
