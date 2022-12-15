@@ -608,7 +608,10 @@ class EnedisAPICoordinator(DataUpdateCoordinator):
 
     def _parse_enedis_time(self, time_string: str) -> datetime:
         _LOGGER.debug(f"Trying to parse {time_string}")
-        a = datetime.strptime(time_string, "%d/%m/%Y %H:%M")
+        try:
+            a = datetime.strptime(time_string, "%d/%m/%Y %H:%M")
+        except ValueError:
+            a = datetime.strptime(time_string, "%d/%m/%Y %H:%M:%S")
         return datetime(
             a.year,
             a.month,
