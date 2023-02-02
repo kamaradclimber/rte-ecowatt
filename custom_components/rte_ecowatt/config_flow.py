@@ -26,7 +26,7 @@ _LOGGER = logging.getLogger(__name__)
 # we follow with a flow of form/menu
 # eventually we call async_create_entry with a dictionnary of data
 # HA calls async_setup_entry with a ConfigEntry which wraps this data (defined in __init__.py)
-# in async_setup_entry we call hass.config_entries.async_setup_platforms to setup each relevant platform (sensor in our case)
+# in async_setup_entry we call hass.config_entries.async_forward_entry_setups to setup each relevant platform (sensor in our case)
 # HA calls async_setup_entry from sensor.py
 
 
