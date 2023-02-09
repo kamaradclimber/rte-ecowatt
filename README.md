@@ -21,9 +21,20 @@ Utilisez [hacs](https://hacs.xyz/).
 ### Configurer home-assistant
 
 La méthode de configuration préférée consiste à utiliser l'interface utilisateur.
+
+![image info](/img/integration.png)
+
+![image info](/img/credential.png)
+
+![image info](/img/success.png)
+
+![image info](/img/check.png)
+
 Vous pouvez configurer deux types de capteurs :
 - Capteurs "horaire" pour regarder le niveau écowatt X heures dans le futur. Vous pouvez regarder jusqu'à 96h pour le moment.
 - Capteurs "journalier" pour examiner le niveau d'écowatt X jours dans le futur. Vous pouvez regarder jusqu'à 3d à l'avance pour le moment. La valeur du capteur "jours" est la pire de toutes les heures de ce jour.
+
+![image info](/img/sensor.png)
 
 Deux capteurs sont générés par défaut : "maintenant" (0 heure d'avance) et "aujourd'hui" (0 jour d'avance).
 
