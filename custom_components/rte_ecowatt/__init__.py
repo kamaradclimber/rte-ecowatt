@@ -339,7 +339,7 @@ class AbstractEcowattLevel(CoordinatorEntity, RestorableCoordinatedSensor):
         timezone = self.hass.config.as_dict()["time_zone"]
         return tz.gettz(timezone)
 
-    def _find_ecowatt_level(self) -> int:
+    def _find_ecowatt_level(self) -> Optional[int]:
         raise NotImplementedError()
 
     @callback
@@ -356,20 +356,23 @@ class AbstractEcowattLevel(CoordinatorEntity, RestorableCoordinatedSensor):
             _LOGGER.info(f"updated '{self.name}' with level {self._state}")
         self.async_write_ha_state()
 
-    def _level2string(self, level):
+    def _level2string(self, level) -> Optional[str]:
         if self.happening_now and level == 3:
             return "Coupure d'électricité en cours"
+        if level is None:
+            return None
         return {
             1: "Situation normale",
             2: "Risques de coupures d'électricité",
             3: "Coupures d'électricité programmées",
         }[level]
 
-    def _level2icon(self, level):
+    def _level2icon(self, level) -> Optional[str]:
         return {
             1: "mdi:check-circle",
             2: "mdi:alert",
             3: "mdi:power-plug-off",
+            None: "mdi:help",
         }[level]
 
     @property
@@ -408,7 +411,7 @@ class HourlyEcowattLevel(AbstractEcowattLevel):
     def unique_id(self) -> str:
         return f"ecowatt-level-in-{self.shift}-hours"
 
-    def _find_ecowatt_level(self) -> int:
+    def _find_ecowatt_level(self) -> Optional[int]:
         now = datetime.now(self._timezone())
         if "ECOWATT_DEBUG" in os.environ:
             now = datetime(2022, 6, 3, 8, 0, 0, tzinfo=self._timezone())
@@ -456,7 +459,7 @@ class DailyEcowattLevel(AbstractEcowattLevel):
     def unique_id(self) -> str:
         return f"ecowatt-level-in-{self.shift}-days"
 
-    def _find_ecowatt_level(self) -> int:
+    def _find_ecowatt_level(self) -> Optional[int]:
         now = datetime.now(self._timezone())
         if "ECOWATT_DEBUG" in os.environ:
             now = datetime(2022, 6, 3, 8, 0, 0, tzinfo=self._timezone())
@@ -482,6 +485,11 @@ class DailyEcowattLevel(AbstractEcowattLevel):
             ] = self._attr_extra_state_attributes[ATTR_PERIOD_START] + timedelta(days=1)
             return ecowatt_data["dvalue"]
         except StopIteration:
+            if self.shift >= 3:
+                _LOGGER.info(
+                    f"No info (yet) for D+{self.shift} level. This state might last for a few hours, most likely until 8am Paris time"
+                )
+                return None
             raise RuntimeError(
                 f"Unable to find ecowatt level for {relevant_date.date()}"
             )
