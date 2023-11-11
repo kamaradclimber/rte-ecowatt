@@ -14,7 +14,7 @@ Use [hacs](https://hacs.xyz/).
 ### Get api access for RTE APIs
 
 - Create an account on [RTE API website](https://data.rte-france.com/web/guest)
-- Register to the [Ecowatt API](https://data.rte-france.com/catalog/-/api/consumption/Ecowatt/v4.0) and click on "Abonnez-vous à l'API", create a new application
+- Register to the [Ecowatt API](https://data.rte-france.com/catalog/-/api/consumption/Ecowatt/v5.0) and click on "Abonnez-vous à l'API", create a new application
 - get the `client_id` and `client_secret` (uuid in both cases)
 
 ### Configure home-assistant

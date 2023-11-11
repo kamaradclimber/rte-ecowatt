@@ -122,6 +122,7 @@ class EcoWattAPICoordinator(DataUpdateCoordinator):
         self.config = config
         self.hass = hass
         self.oauth_client = AsyncOauthClient(config)
+        self.api_version = "v5"
 
     async def async_oauth_client(self):
         client = await self.oauth_client.client()
@@ -176,11 +177,23 @@ class EcoWattAPICoordinator(DataUpdateCoordinator):
             headers = {
                 "Authorization": f"{self.token['token_type']} {self.token['access_token']}"
             }
-            url = f"{BASE_URL}/open_api/ecowatt/v4/signals"
+            url = f"{BASE_URL}/open_api/ecowatt/{self.api_version}/signals"
             if "ECOWATT_DEBUG" in os.environ:
-                url = f"{BASE_URL}/open_api/ecowatt/v4/sandbox/signals"
+                url = f"{BASE_URL}/open_api/ecowatt/{self.api_version}/sandbox/signals"
             api_result = await client.get(url, headers=headers)
             _LOGGER.info(f"data received, status code: {api_result.status}")
+            if api_result.status == 403:
+                # a code 403 is likely to be an api key from a previous version of the api
+                if self.api_version == "v5":
+                    _LOGGER.warn(
+                        f"Received a 403, api key is likely from a previous version, downgrading to api v4. You can regenerate a new api key to avoid this warning"
+                    )
+                    self.api_version = "v4"
+                    return await self.update_method()
+                else:
+                    raise UpdateFailed(
+                        f"Error communicating with RTE API: received a 403 from api, even with version {self.api_version}"
+                    )
             if api_result.status == 429:
                 # a code 429 is expected when requesting more often than every 15minutes and not using the sandbox url
                 # FIXME(kamaradclimber): avoid this error when home assistant is restarting by storing state and last update
@@ -225,7 +238,9 @@ class RestorableCoordinatedSensor(RestoreSensor):
             ):
                 _LOGGER.debug(f"Restoring state for {self.unique_id}")
                 self._attr_native_value = extra_stored_data.native_value
-                self._attr_native_unit_of_measurement = extra_stored_data.native_unit_of_measurement
+                self._attr_native_unit_of_measurement = (
+                    extra_stored_data.native_unit_of_measurement
+                )
                 # sadly it seems as of 2023.6 we don't have any way to get back the additional attributes
                 self.coordinator.last_update_success = True
             else:
