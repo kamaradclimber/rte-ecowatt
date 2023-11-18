@@ -325,7 +325,7 @@ class DowngradedEcowattLevelCalendar(CoordinatorEntity, CalendarEntity):
         if self.state == STATE_ON and level == 3:
             return "Coupure d'électricité en cours"
         return {
-            0: "Situation normal - Electricité faible émission de CO2",
+            0: "Situation normale - Electricité faible émission de CO2",
             1: "Situation normale",
             2: "Risques de coupures d'électricité",
             3: "Coupures d'électricité programmées",
@@ -378,7 +378,7 @@ class AbstractEcowattLevel(CoordinatorEntity, RestorableCoordinatedSensor):
         if level is None:
             return None
         return {
-            0: "Situation normal - Electricité faible émission de CO2",
+            0: "Situation normale - Electricité faible émission de CO2",
             1: "Situation normale",
             2: "Risques de coupures d'électricité",
             3: "Coupures d'électricité programmées",
