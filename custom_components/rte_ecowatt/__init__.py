@@ -197,6 +197,11 @@ class EcoWattAPICoordinator(DataUpdateCoordinator):
             if api_result.status == 429:
                 # a code 429 is expected when requesting more often than every 15minutes and not using the sandbox url
                 # FIXME(kamaradclimber): avoid this error when home assistant is restarting by storing state and last update
+                if self.data is not None:
+                    _LOGGER.warn(
+                        "Error communicating with RTE API: requests too frequent. Using old data"
+                    )
+                    return self.data
                 raise UpdateFailed(
                     f"Error communicating with RTE API: requests too frequent to RTE API"
                 )
