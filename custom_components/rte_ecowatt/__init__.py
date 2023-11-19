@@ -13,6 +13,7 @@ from async_oauthlib import OAuth2Session
 import aiohttp
 
 
+from homeassistant.helpers.storage import Store
 from homeassistant.const import Platform, STATE_ON
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.typing import ConfigType
@@ -124,6 +125,8 @@ class EcoWattAPICoordinator(DataUpdateCoordinator):
         self.oauth_client = AsyncOauthClient(config)
         self.api_version = "v5"
 
+        self._custom_store = Store(hass, 1, "rte_ecowatt")
+
     async def async_oauth_client(self):
         client = await self.oauth_client.client()
         self.token = client.token
@@ -161,6 +164,43 @@ class EcoWattAPICoordinator(DataUpdateCoordinator):
         This could be the place to pre-process the data to lookup tables
         so entities can quickly look up their data.
         """
+        body = None
+        try:
+            previous_data = await self._custom_store.async_load()
+            if previous_data is not None:
+                last_update = datetime.strptime(
+                    previous_data["last_update"], "%Y-%m-%dT%H:%M:%S.%f"
+                )
+                if (datetime.now() - last_update) < timedelta(minutes=15):
+                    _LOGGER.info(
+                        "Loading RTE ecowatt data from storage instead of querying api"
+                    )
+                    body = previous_data["body"]
+        except Exception as e:
+            _LOGGER.warn(f"Impossible to load previous data: {e}")
+        if body is None:
+            body = await self._real_update_method()
+            try:
+                await self._custom_store.async_save(
+                    {
+                        "last_update": datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f"),
+                        "body": body,
+                    }
+                )
+            except Exception as e:
+                _LOGGER.exception("Error received while caching API data")
+                raise e
+        signals = json.loads(body)["signals"]
+        # additional parsing
+        for day_data in signals:
+            parsed_time = datetime.strptime(day_data["jour"], "%Y-%m-%dT%H:%M:%S%z")
+            day_data["date"] = parsed_time.date()
+            day_data["datetime"] = parsed_time
+
+        _LOGGER.debug(f"data parsed: {signals}")
+        return signals
+
+    async def _real_update_method(self):
         try:
             _LOGGER.debug(
                 f"Calling update method, {len(self._listeners)} listeners subscribed"
@@ -170,6 +210,7 @@ class EcoWattAPICoordinator(DataUpdateCoordinator):
                     "Failing update on purpose to test state restoration"
                 )
             _LOGGER.debug("Starting collecting data")
+
             if self.skip_refresh():
                 _LOGGER.warning(f"Skipping data refresh because: {self.skip_refresh()}")
                 return self.data
@@ -212,14 +253,7 @@ class EcoWattAPICoordinator(DataUpdateCoordinator):
             body = await api_result.text()
             await client.close()  # we won't need the client anymore
             _LOGGER.debug(f"api response body: {body}")
-            signals = json.loads(body)["signals"]
-            for day_data in signals:
-                parsed_time = datetime.strptime(day_data["jour"], "%Y-%m-%dT%H:%M:%S%z")
-                day_data["date"] = parsed_time.date()
-                day_data["datetime"] = parsed_time
-
-            _LOGGER.debug(f"data parsed: {signals}")
-            return signals
+            return body
         except Exception as err:
             raise UpdateFailed(f"Error communicating with API: {err}")
 
