@@ -13,7 +13,6 @@ from .const import (
     CONF_CLIENT_ID,
     CONF_CLIENT_SECRET,
     CONF_SENSORS,
-    CONF_ENEDIS_LOAD_SHEDDING,
     CONF_SENSOR_UNIT,
     CONF_SENSOR_SHIFT,
 )
@@ -31,7 +30,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class SetupConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    VERSION = 2
+    VERSION = 3
 
     async def async_step_user(self, user_input: Optional[dict[str, Any]] = None):
         """Called once with None as user_input, then a second time with user provided input"""
@@ -58,8 +57,6 @@ class SetupConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 self.user_input = user_input
                 if "sensors" not in self.user_input:
                     self.user_input["sensors"] = []
-                if CONF_ENEDIS_LOAD_SHEDDING not in self.user_input:
-                    self.user_input[CONF_ENEDIS_LOAD_SHEDDING] = [False]
 
                 return self._configuration_menu("user")
 
@@ -124,26 +121,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 "finish_configuration",
                 "configure_hours_sensor",
                 "configure_days_sensor",
-                "enable_load_shedding_announcements",
             ],
-        )
-
-    async def async_step_enable_load_shedding_announcements(
-        self, user_input: Optional[dict[str, Any]] = None
-    ):
-        step_name = f"enable_load_shedding_announcements"
-        errors = {}
-        data_schema = {vol.Required(CONF_ENEDIS_LOAD_SHEDDING): vol.Coerce(bool)}
-        if user_input is not None:
-            self.user_input[CONF_ENEDIS_LOAD_SHEDDING][0] = user_input[
-                CONF_ENEDIS_LOAD_SHEDDING
-            ]
-            return self._configuration_menu(step_name)
-
-        return self.async_show_form(
-            step_id=step_name,
-            data_schema=vol.Schema(data_schema),
-            errors=errors,
         )
 
     async def async_step_finish_configuration(

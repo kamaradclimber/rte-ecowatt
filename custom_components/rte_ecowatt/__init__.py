@@ -31,7 +31,6 @@ from homeassistant.components.calendar import CalendarEntity, CalendarEvent
 from .const import (
     CONF_CLIENT_ID,
     CONF_CLIENT_SECRET,
-    CONF_ENEDIS_LOAD_SHEDDING,
     TOKEN_URL,
     BASE_URL,
     ATTR_LEVEL_CODE,
@@ -56,9 +55,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if entry.entry_id not in hass.data[DOMAIN]:
         hass.data[DOMAIN][entry.entry_id] = {}
     hass.data[DOMAIN][entry.entry_id]["rte_coordinator"] = EcoWattAPICoordinator(
-        hass, dict(entry.data)
-    )
-    hass.data[DOMAIN][entry.entry_id]["enedis_coordinator"] = EnedisAPICoordinator(
         hass, dict(entry.data)
     )
 
@@ -552,310 +548,23 @@ class DailyEcowattLevel(AbstractEcowattLevel):
             )
 
 
-class EnedisAPICoordinator(DataUpdateCoordinator):
-    """A coordinator to fetch data from the api only once"""
-
-    def __init__(self, hass, config: ConfigType):
-        super().__init__(
-            hass,
-            _LOGGER,
-            name="enedis api",  # for logging purpose
-            update_method=self.update_method,
-        )
-        self.config = config
-        self.hass = hass
-        self._async_client = None
-
-    async def async_client(self):
-        if not self._async_client:
-            self._async_client = get_async_client(self.hass, verify_ssl=True)
-        return self._async_client
-
-    def _timezone(self):
-        timezone = self.hass.config.as_dict()["time_zone"]
-        return tz.gettz(timezone)
-
-    async def fetch_street_and_insee_code(self) -> Tuple[str, str]:
-        client = await self.async_client()
-        if "ECOWATT_DEBUG" in os.environ:
-            lat = 48.841
-            lon = 2.3332
-        else:
-            lat = self.hass.config.as_dict()["latitude"]
-            lon = self.hass.config.as_dict()["longitude"]
-        r = await client.get(
-            f"https://api-adresse.data.gouv.fr/reverse/?lat={lat}&lon={lon}&type=housenumber"
-        )
-        if not r.is_success:
-            raise UpdateFailed(
-                "Failed to fetch address from api-adresse.data.gouv.fr api"
-            )
-        data = r.json()
-        _LOGGER.debug(f"Data received from api-adresse.data.gouv.fr: {data}")
-        if len(data["features"]) == 0:
-            _LOGGER.warn(
-                f"Data received from api-adresse.data.gouv.fr is empty for those coordinates: ({lat}, {lon}). Are you sure they are located in France?"
-            )
-            raise UpdateFailed(
-                "Impossible to find approximate address of the current HA instance"
-            )
-        properties = data["features"][0]["properties"]
-        return (properties["street"], properties["citycode"])
-
-    async def update_method(self):
-        """Fetch data from API endpoint."""
-        try:
-            _LOGGER.debug(
-                f"Calling update method, {len(self._listeners)} listeners subscribed"
-            )
-            if "ENEDIS_APIFAIL" in os.environ:
-                raise UpdateFailed(
-                    "Failing update on purpose to test state restoration"
-                )
-            _LOGGER.debug("Starting collecting data")
-            client = await self.async_client()
-
-            r = await client.get(
-                "https://megacache.p.web-enedis.fr/anon/v2/shedding/state_js"
-            )
-            if not r.is_success:
-                _LOGGER.warn(
-                    f"Failure to fetch data from /shedding/state_js endpoint: {r.text}"
-                )
-                raise UpdateFailed("Failed fetching enedis data at step 1")
-            match = re.search(r"^.+var xtick0\s*=\s*'(.+)'.*$", r.text)
-            if not match:
-                raise UpdateFailed(f"Impossible to find expected data in {r.text}")
-            step = match.groups()[0]
-
-            r = await client.post(
-                "https://megacache.p.web-enedis.fr/v2/g/trace", json={"step": step}
-            )
-            if not r.is_success:
-                _LOGGER.warn(
-                    f"Failure to fetch data from /v2/g/trace endpoint: {r.text}"
-                )
-                raise UpdateFailed("Failed fetching enedis data at step 2")
-            jwt_token = r.json()["token"]
-            _LOGGER.debug(f"Fetched token {jwt_token} from enedis api")
-
-            (street, city_code) = await self.fetch_street_and_insee_code()
-            encoded_street = urllib.parse.quote_plus(street)
-
-            url = f"https://megacache.p.web-enedis.fr/v2/shedding?street={encoded_street}&insee_code={city_code}"
-            _LOGGER.debug(f"Requesting shedding from {url}")
-            r = await client.get(
-                url,
-                headers={"Authorization": f"Bearer {jwt_token}"},
-            )
-            if not r.is_success:
-                _LOGGER.warn(f"Failure to fetch data from /v2/shedding: {r.text}")
-                raise UpdateFailed("Failed fetching enedis data at step 3")
-            data = r.json()
-            if "ECOWATT_DEBUG" in os.environ:
-                # TODO: show a real example of shedding
-                data = {"success": True, "eld": False, "shedding": []}
-            _LOGGER.debug(f"Data fetched from enedis: {data}")
-            if not data["success"]:
-                raise UpdateFailed("Enedis API answered success: false at step 4")
-            for shedding_event in data["shedding"]:
-                shedding_event["start_date"] = self._parse_enedis_time(
-                    shedding_event["start_date"]
-                )
-                shedding_event["stop_date"] = self._parse_enedis_time(
-                    shedding_event["stop_date"]
-                )
-                shedding_event["refresh_date"] = self._parse_enedis_time(
-                    shedding_event["refresh_date"]
-                )
-            data["address"] = {"street": street, "insee_code": city_code}
-            return data
-        except Exception as err:
-            raise UpdateFailed(f"Error communicating with API: {err}")
-
-    def _parse_enedis_time(self, time_string: str) -> datetime:
-        _LOGGER.debug(f"Trying to parse {time_string}")
-        try:
-            a = datetime.strptime(time_string, "%d/%m/%Y %H:%M")
-        except ValueError:
-            a = datetime.strptime(time_string, "%d/%m/%Y %H:%M:%S")
-        return datetime(
-            a.year,
-            a.month,
-            a.day,
-            a.hour,
-            a.minute,
-            a.second,
-            tzinfo=tz.gettz("Europe/Paris"),
-        )
-
-
-class ElectricityDistributorEntity(CoordinatorEntity, RestorableCoordinatedSensor):
-    """Exposes type of electricity distribution (via Enedis or ELD)"""
-
-    def __init__(self, coordinator: EnedisAPICoordinator, hass: HomeAssistant):
-        super().__init__(coordinator)
-        self._restored = False
-        self.hass = hass
-        self._attr_name = "Electricity distributor"
-        self._state = None
-        self._attr_extra_state_attributes: Dict[str, Any] = {}
-        self._attr_entity_category = EntityCategory.DIAGNOSTIC
-
-    @property
-    def unique_id(self) -> str:
-        return f"enedis-electricity-distributor"
-
-    @callback
-    def _handle_coordinator_update(self) -> None:
-        if not self.coordinator.last_update_success:
-            _LOGGER.debug("Last coordinator failed, assuming state has not changed")
-            return
-        if self.coordinator.data["eld"]:
-            self._state = "Entreprise Locale de Distribution"
-        else:
-            self._state = "Enedis"
-        self.async_write_ha_state()
-
-    @property
-    def state(self) -> Optional[str]:
-        return self._state
-
-    @property
-    def device_info(self):
-        return {"identifiers": {(DOMAIN, "enedis")}, "name": "Enedis"}
-
-
-class EnedisNextDowngradedPeriods(CoordinatorEntity, CalendarEntity):
-    """Expose downgraded periods for Enedis"""
-
-    def __init__(self, coordinator: EnedisAPICoordinator, hass: HomeAssistant):
-        CoordinatorEntity.__init__(self, coordinator)
-        self.hass = hass
-        self._attr_name = "Next load sheddings"
-        self._events = []
-
-    @property
-    def unique_id(self) -> str:
-        return f"enedis-next-downgraded-periods"
-
-    @property
-    def event(self) -> Optional[CalendarEvent]:
-        if len(self._events) > 0:
-            self._events[0]
-        return None
-
-    async def async_get_events(
-        self, hass: HomeAssistant, start_date: datetime, end_date: datetime
-    ) -> list[CalendarEvent]:
-        relevant_events = []
-        for event in self._events:
-            included = event.start <= start_date and event.end >= end_date
-            included = included or (
-                event.start >= start_date and event.start <= end_date
-            )
-            included = included or (event.end >= start_date and event.end <= end_date)
-            if included:
-                relevant_events.append(event)
-        return relevant_events
-
-    @callback
-    def _handle_coordinator_update(self) -> None:
-        if not self.coordinator.last_update_success:
-            _LOGGER.debug("Last coordinator failed, assuming state has not changed")
-            return
-        if self.coordinator.data["eld"]:
-            _LOGGER.warn(
-                f"Current location is served by a local-distribution company (ELD). Enedis does not provide data about it"
-            )
-            return
-
-        _LOGGER.debug(
-            f"Enedis returned {len(self.coordinator.data['shedding'])} shedding events"
-        )
-        events = []
-        for shedding_event in self.coordinator.data["shedding"]:
-            events.append(
-                CalendarEvent(
-                    start=shedding_event["start_date"],
-                    end=shedding_event["stop_date"],
-                    summary="Delestage prévu par Enedis",
-                    description=f"Coupure d'électricité prévue",
-                )
-            )
-        self._events = events
-
-        self._events = self._merge_events(events)
-        self.async_write_ha_state()  # we probably don't need this line
-
-    def _merge_events(self, events: list[CalendarEvent]) -> list[CalendarEvent]:
-        events.sort(key=lambda e: e.start)
-        if len(events) == 0:
-            return []
-        merged_events = [events[0]]
-        for event in events[1:]:
-            if (
-                event.start == merged_events[-1].end
-                and event.summary == merged_events[-1].summary
-                and event.description == merged_events[-1].description
-            ):
-                merged_events[-1].end = event.end
-            else:
-                merged_events.append(event)
-        return merged_events
-
-    @property
-    def device_info(self):
-        return {"identifiers": {(DOMAIN, "enedis")}, "name": "Enedis"}
-
-
 async def async_migrate_entry(hass, config_entry: ConfigEntry):
     if config_entry.version == 1:
         _LOGGER.warn(
             f"config_entry version is {config_entry.version}, migrating to version 2"
         )
         new = {**config_entry.data}
-        new[CONF_ENEDIS_LOAD_SHEDDING] = [False]
+        new["enedis_load_shedding"] = [False]
         config_entry.version = 2
         hass.config_entries.async_update_entry(config_entry, data=new)
         _LOGGER.info(f"Migration to version {config_entry.version} successful")
+    if config_entry.version < 3:
+        _LOGGER.warn(
+            f"config_entry version is {config_entry.version}, migrating to version 3"
+        )
+        new = {**config_entry.data}
+        del new["enedis_load_shedding"]
+        config_entry.version = 3
+        hass.config_entries.async_update_entry(config_entry, data=new)
+        _LOGGER.info(f"Migration to version {config_entry.version} successful")
     return True
-
-
-class DetectedAddress(CoordinatorEntity, RestorableCoordinatedSensor):
-    """Exposes the address detected from GPS coordinate and sent to Enedis"""
-
-    def __init__(self, coordinator: EnedisAPICoordinator, hass: HomeAssistant):
-        super().__init__(coordinator)
-        self._restored = False
-        self.hass = hass
-        self._attr_extra_state_attributes: Dict[str, Any] = {}
-        self._attr_name = "Detected address"
-        self._state = None
-        self._attr_entity_category = EntityCategory.DIAGNOSTIC
-
-    @callback
-    def _handle_coordinator_update(self) -> None:
-        if not self.coordinator.last_update_success:
-            _LOGGER.debug("Last coordinator failed, assuming state has not changed")
-            return
-        data = self.coordinator.data["address"]
-        self._state = f"{data['street']} {data['insee_code']}"
-        self.async_write_ha_state()
-
-    @property
-    def state(self) -> Optional[str]:
-        return self._state
-
-    @property
-    def native_value(self):
-        return self._state
-
-    @property
-    def device_info(self):
-        # technically the sensor should belong to a French Governement entity
-        return {"identifiers": {(DOMAIN, "enedis")}, "name": "Enedis"}
-
-    @property
-    def unique_id(self) -> str:
-        return f"enedis-sent-address"

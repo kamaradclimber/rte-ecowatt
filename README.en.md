@@ -2,8 +2,6 @@
 
 Component to expose Ecowatt levels for the foreseable future. See https://www.monecowatt.fr/ for web access.
 
-The integration optionaly exposes load shedding information via Enedis website. This feature is opt-in because it shares localization information via a 3rd party website. It is activated via /config/integrations page (click on "Configure" button next to the RTE Ecowatt card).
-
 ## Installation
 
 Use [hacs](https://hacs.xyz/).

@@ -23,20 +23,7 @@
         "menu_options": {
           "finish_configuration": "Finish configuration",
           "configure_hours_sensor": "Configure another sensor with hour granularity",
-          "configure_days_sensor": "Configure another sensor with day granularity",
-          "enable_load_shedding_announcements": "Look for load shedding announcements"
-        }
-      },
-      "enable_load_shedding_announcements": {
-        "description": "Expose information about planned load shedding",
-        "data": {
-          "enedis_load_shedding": "Fetch load shedding information from enedis. I understand my HA instance latitude/longitude will be sent to api-adresse.data.gouv.fr to detect my address."
-        },
-        "menu_options": {
-          "finish_configuration": "Finish configuration",
-          "configure_hours_sensor": "Configure sensor with hour granularity",
-          "configure_days_sensor": "Configure sensor with day granularity",
-          "enable_load_shedding_announcements": "Look for load shedding announcements"
+          "configure_days_sensor": "Configure another sensor with day granularity"
         }
       },
       "configure_hours_sensor": {
@@ -47,8 +34,7 @@
         "menu_options": {
           "finish_configuration": "Finish configuration",
           "configure_hours_sensor": "Configure another sensor with hour granularity",
-          "configure_days_sensor": "Configure another sensor with day granularity",
-          "enable_load_shedding_announcements": "Look for load shedding announcements"
+          "configure_days_sensor": "Configure another sensor with day granularity"
         }
       },
       "configure_days_sensor": {
@@ -59,8 +45,7 @@
         "menu_options": {
           "finish_configuration": "Finish configuration",
           "configure_hours_sensor": "Configure another sensor with hour granularity",
-          "configure_days_sensor": "Configure another sensor with day granularity",
-          "enable_load_shedding_announcements": "Look for load shedding announcements"
+          "configure_days_sensor": "Configure another sensor with day granularity"
         }
       }
     },
