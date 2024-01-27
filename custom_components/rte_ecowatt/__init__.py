@@ -161,6 +161,7 @@ class EcoWattAPICoordinator(DataUpdateCoordinator):
         so entities can quickly look up their data.
         """
         body = None
+        loaded_from_cache = False
         try:
             previous_data = await self._custom_store.async_load()
             if previous_data is not None:
@@ -172,6 +173,7 @@ class EcoWattAPICoordinator(DataUpdateCoordinator):
                         "Loading RTE ecowatt data from storage instead of querying api"
                     )
                     body = previous_data["body"]
+                    loaded_from_cache = True
         except Exception as e:
             _LOGGER.warn(f"Impossible to load previous data: {e}")
         if body is None:
@@ -186,7 +188,13 @@ class EcoWattAPICoordinator(DataUpdateCoordinator):
             except Exception as e:
                 _LOGGER.exception("Error received while caching API data")
                 raise e
-        signals = json.loads(body)["signals"]
+        json_body = json.loads(body)
+        if "signals" not in json_body:
+            if loaded_from_cache:
+                raise Exception(f"Cached data is invalid. Removing `{self._custom_store.path}` and restart HA should help")
+            else:
+                raise Exception(f"Fetched data is invalid, it does not have 'signals' key. {body}")
+        signals = json_body["signals"]
         # additional parsing
         for day_data in signals:
             parsed_time = datetime.strptime(day_data["jour"], "%Y-%m-%dT%H:%M:%S%z")
