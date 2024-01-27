@@ -196,7 +196,7 @@ class EcoWattAPICoordinator(DataUpdateCoordinator):
         json_body = json.loads(body)
         if "signals" not in json_body:
             if loaded_from_cache:
-                raise Exception(f"Cached data is invalid. Removing `{self._custom_store.path}` and restart HA should help")
+                raise Exception(f"Cached data is invalid. Removing `{self._custom_store.path}` and restart HA should help. Data is cache is: {body}")
             else:
                 raise Exception(f"Fetched data is invalid, it does not have 'signals' key. {body}")
         signals = json_body["signals"]
