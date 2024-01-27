@@ -86,7 +86,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         entry, [Platform.SENSOR, Platform.CALENDAR]
     )
     if unload_ok:
-        hass.data[DOMAIN].pop(entry.entry_id)
+        config = hass.data[DOMAIN].pop(entry.entry_id)
+        if "rte_coordinator" in config:
+            await config["rte_coordinator"].clean()
     return unload_ok
 
 
@@ -122,6 +124,9 @@ class EcoWattAPICoordinator(DataUpdateCoordinator):
         self.api_version = "v5"
 
         self._custom_store = Store(hass, 1, "rte_ecowatt")
+
+    async def clean(self):
+        await self._custom_store.async_remove()
 
     async def async_oauth_client(self):
         client = await self.oauth_client.client()
