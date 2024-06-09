@@ -305,6 +305,12 @@ class DowngradedEcowattLevelCalendar(CoordinatorEntity, CalendarEntity):
         self.hass = hass
         self._attr_name = "Ecowatt downgraded level"
         self._events = []
+        self.options = {
+            0: "Situation normale - Electricité faible émission de CO2",
+            1: "Situation normale",
+            2: "Risques de coupures d'électricité",
+            3: "Coupures d'électricité programmées",
+        }
 
     @property
     def event(self) -> Optional[CalendarEvent]:
@@ -372,12 +378,7 @@ class DowngradedEcowattLevelCalendar(CoordinatorEntity, CalendarEntity):
     def _level2string(self, level):
         if self.state == STATE_ON and level == 3:
             return "Coupure d'électricité en cours"
-        return {
-            0: "Situation normale - Electricité faible émission de CO2",
-            1: "Situation normale",
-            2: "Risques de coupures d'électricité",
-            3: "Coupures d'électricité programmées",
-        }[level]
+        return self.options[level]
 
     @property
     def device_info(self):
@@ -398,6 +399,13 @@ class AbstractEcowattLevel(CoordinatorEntity, RestorableCoordinatedSensor):
         self._state = None
         self.shift = shift
         self.happening_now = False
+        self.options = {
+            0: "Situation normale - Electricité faible émission de CO2",
+            1: "Situation normale",
+            2: "Risques de coupures d'électricité",
+            3: "Coupures d'électricité programmées",
+        }
+        self._attr_extra_state_attributes["options"] = list(self.options.values()) + ["Coupure d'électricité en cours"]
 
     def _timezone(self):
         timezone = self.hass.config.as_dict()["time_zone"]
@@ -425,12 +433,7 @@ class AbstractEcowattLevel(CoordinatorEntity, RestorableCoordinatedSensor):
             return "Coupure d'électricité en cours"
         if level is None:
             return None
-        return {
-            0: "Situation normale - Electricité faible émission de CO2",
-            1: "Situation normale",
-            2: "Risques de coupures d'électricité",
-            3: "Coupures d'électricité programmées",
-        }[level]
+        return self.options[level]
 
     def _level2icon(self, level) -> Optional[str]:
         return {
