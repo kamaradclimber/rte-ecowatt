@@ -10,5 +10,5 @@
   "requirements": [
     "Async-OAuthlib==0.0.9"
   ],
-  "version": "0.6.3"
+  "version": "0.9.4"
 }
