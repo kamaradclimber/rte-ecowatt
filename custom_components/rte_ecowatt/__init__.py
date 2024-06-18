@@ -196,13 +196,9 @@ class EcoWattAPICoordinator(DataUpdateCoordinator):
         json_body = json.loads(body)
         if "signals" not in json_body:
             if loaded_from_cache:
-                raise Exception(
-                    f"Cached data is invalid. Removing `{self._custom_store.path}` and restart HA should help. Data is cache is: {body}"
-                )
+                raise Exception(f"Cached data is invalid. Removing `{self._custom_store.path}` and restart HA should help. Data is cache is: {body}")
             else:
-                raise Exception(
-                    f"Fetched data is invalid, it does not have 'signals' key. {body}"
-                )
+                raise Exception(f"Fetched data is invalid, it does not have 'signals' key. {body}")
         signals = json_body["signals"]
         # additional parsing
         for day_data in signals:
@@ -409,9 +405,7 @@ class AbstractEcowattLevel(CoordinatorEntity, RestorableCoordinatedSensor):
             2: "Risques de coupures d'électricité",
             3: "Coupures d'électricité programmées",
         }
-        self._attr_extra_state_attributes["options"] = list(self.options.values()) + [
-            "Coupure d'électricité en cours"
-        ]
+        self._attr_extra_state_attributes["options"] = list(self.options.values()) + ["Coupure d'électricité en cours"]
 
     def _timezone(self) -> tzinfo:
         return dt_util.get_default_time_zone()
@@ -503,13 +497,15 @@ class HourlyEcowattLevel(AbstractEcowattLevel):
             self._attr_extra_state_attributes[ATTR_GENERATION_TIME] = ecowatt_data[
                 "GenerationFichier"
             ]
-            self._attr_extra_state_attributes[ATTR_PERIOD_START] = (
-                relevant_date
-                - timedelta(minutes=relevant_date.minute, seconds=relevant_date.second)
+            self._attr_extra_state_attributes[
+                ATTR_PERIOD_START
+            ] = relevant_date - timedelta(
+                minutes=relevant_date.minute, seconds=relevant_date.second
             )
-            self._attr_extra_state_attributes[ATTR_PERIOD_END] = (
-                self._attr_extra_state_attributes[ATTR_PERIOD_START]
-                + timedelta(hours=1)
+            self._attr_extra_state_attributes[
+                ATTR_PERIOD_END
+            ] = self._attr_extra_state_attributes[ATTR_PERIOD_START] + timedelta(
+                hours=1
             )
             level = next(
                 filter(lambda e: e["pas"] == relevant_date.hour, ecowatt_data["values"])
@@ -545,17 +541,16 @@ class DailyEcowattLevel(AbstractEcowattLevel):
             self._attr_extra_state_attributes[ATTR_GENERATION_TIME] = ecowatt_data[
                 "GenerationFichier"
             ]
-            self._attr_extra_state_attributes[ATTR_PERIOD_START] = (
-                relevant_date
-                - timedelta(
-                    hours=relevant_date.hour,
-                    minutes=relevant_date.minute,
-                    seconds=relevant_date.second,
-                )
+            self._attr_extra_state_attributes[
+                ATTR_PERIOD_START
+            ] = relevant_date - timedelta(
+                hours=relevant_date.hour,
+                minutes=relevant_date.minute,
+                seconds=relevant_date.second,
             )
-            self._attr_extra_state_attributes[ATTR_PERIOD_END] = (
-                self._attr_extra_state_attributes[ATTR_PERIOD_START] + timedelta(days=1)
-            )
+            self._attr_extra_state_attributes[
+                ATTR_PERIOD_END
+            ] = self._attr_extra_state_attributes[ATTR_PERIOD_START] + timedelta(days=1)
             return ecowatt_data["dvalue"]
         except StopIteration:
             if self.shift >= 3:
