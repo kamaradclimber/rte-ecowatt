@@ -233,17 +233,9 @@ class EcoWattAPICoordinator(DataUpdateCoordinator):
             api_result = await client.get(url, headers=headers)
             _LOGGER.info(f"data received, status code: {api_result.status}")
             if api_result.status == 403:
-                # a code 403 is likely to be an api key from a previous version of the api
-                if self.api_version == "v5":
-                    _LOGGER.warn(
-                        f"Received a 403, api key is likely from a previous version, downgrading to api v4. You can regenerate a new api key to avoid this warning"
-                    )
-                    self.api_version = "v4"
-                    return await self.update_method()
-                else:
-                    raise UpdateFailed(
-                        f"Error communicating with RTE API: received a 403 from api, even with version {self.api_version}"
-                    )
+                raise UpdateFailed(
+                    f"Error communicating with RTE API: received a 403 from api"
+                )
             if api_result.status == 429:
                 # a code 429 is expected when requesting more often than every 15minutes and not using the sandbox url
                 # FIXME(kamaradclimber): avoid this error when home assistant is restarting by storing state and last update
