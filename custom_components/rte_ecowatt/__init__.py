@@ -562,8 +562,7 @@ async def async_migrate_entry(hass, config_entry: ConfigEntry):
         )
         new = {**config_entry.data}
         new["enedis_load_shedding"] = [False]
-        config_entry.version = 2
-        hass.config_entries.async_update_entry(config_entry, data=new)
+        hass.config_entries.async_update_entry(config_entry, data=new, version=2)
         _LOGGER.info(f"Migration to version {config_entry.version} successful")
     if config_entry.version < 3:
         _LOGGER.warn(
@@ -571,7 +570,6 @@ async def async_migrate_entry(hass, config_entry: ConfigEntry):
         )
         new = {**config_entry.data}
         del new["enedis_load_shedding"]
-        config_entry.version = 3
-        hass.config_entries.async_update_entry(config_entry, data=new)
+        hass.config_entries.async_update_entry(config_entry, data=new, version=3)
         _LOGGER.info(f"Migration to version {config_entry.version} successful")
     return True
