@@ -2,6 +2,8 @@
 
 Composant pour exposer les niveaux Ecowatt dans un avenir prévisible. Voir https://www.monecowatt.fr/ pour l'accès web.
 
+![downloads](https://img.shields.io/badge/dynamic/json?color=41BDF5&logo=home-assistant&label=integration%20usage&suffix=%20installs&cacheSeconds=15600&url=https://analytics.home-assistant.io/custom_integrations.json&query=$.rte_ecowatt.total)
+
 ## Installation
 
 Utilisez [hacs](https://hacs.xyz/).
