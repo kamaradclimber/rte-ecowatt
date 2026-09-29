@@ -9,7 +9,6 @@ from typing import Any, Dict, Optional, Tuple
 from dateutil import tz
 from itertools import dropwhile, takewhile
 from oauthlib.oauth2 import BackendApplicationClient
-from async_oauthlib import OAuth2Session
 import aiohttp
 
 
@@ -99,14 +98,53 @@ class AsyncOauthClient:
         self.token = ""
 
     async def client(self):
-        client = BackendApplicationClient(client_id=self.config[CONF_CLIENT_ID])
-        session = OAuth2Session(client=client)
+        """Return an authenticated session against the RTE API.
+
+        This reimplements the OAuth2 client_credentials token fetch that was
+        previously delegated to the `Async-OAuthlib` third-party package, using
+        only `aiohttp` and `oauthlib` (both bundled with Home Assistant). This
+        avoids requiring a pip install of an extra dependency at setup time.
+        """
+        oauth_client = BackendApplicationClient(
+            client_id=self.config[CONF_CLIENT_ID]
+        )
         auth = aiohttp.helpers.BasicAuth(
             self.config[CONF_CLIENT_ID], self.config[CONF_CLIENT_SECRET]
         )
-        self.token = await session.fetch_token(token_url=TOKEN_URL, auth=auth)
+        body = oauth_client.prepare_request_body()
+        session = aiohttp.ClientSession()
+        try:
+            async with session.post(
+                TOKEN_URL,
+                data=body,
+                auth=auth,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            ) as resp:
+                # parse_request_body_response raises the appropriate oauthlib
+                # error (e.g. InvalidClientError for bad credentials) and
+                # returns the token dict on success.
+                self.token = oauth_client.parse_request_body_response(
+                    await resp.text()
+                )
+        except Exception:
+            await session.close()
+            raise
         _LOGGER.debug("Fetched a token for RTE API")
-        return session
+        return OAuth2SessionWrapper(session, self.token)
+
+
+class OAuth2SessionWrapper:
+    """Thin wrapper around an aiohttp session carrying an OAuth token."""
+
+    def __init__(self, session, token):
+        self._session = session
+        self.token = token
+
+    async def get(self, url, **kwargs):
+        return await self._session.get(url, **kwargs)
+
+    async def close(self):
+        await self._session.close()
 
 
 class EcoWattAPICoordinator(DataUpdateCoordinator):
