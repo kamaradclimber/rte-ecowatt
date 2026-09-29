@@ -1,12 +1,14 @@
 {
   "domain": "rte_ecowatt",
   "name": "My EcoWatt by RTE",
-  "codeowners": ["@kamaradclimber"],
+  "codeowners": [
+    "@kamaradclimber"
+  ],
   "config_flow": true,
   "documentation": "https://github.com/kamaradclimber/rte-ecowatt",
   "integration_type": "device",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/kamaradclimber/rte-ecowatt/issues",
   "requirements": [],
-  "version": "0.9.4"
+  "version": "0.10.0"
 }
