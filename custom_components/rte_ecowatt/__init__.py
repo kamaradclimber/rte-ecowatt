@@ -18,6 +18,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.entity import EntityCategory
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
     DataUpdateCoordinator,
@@ -411,8 +412,11 @@ class DowngradedEcowattLevelCalendar(CoordinatorEntity, CalendarEntity):
         return self.options[level]
 
     @property
-    def device_info(self):
-        return {"identifiers": {(DOMAIN, "RTE")}, "name": "RTE"}
+    def device_info(self) -> DeviceInfo:
+        return DeviceInfo(
+            identifiers={(DOMAIN, "RTE")},
+            name="RTE",
+        )
 
 
 class AbstractEcowattLevel(CoordinatorEntity, RestorableCoordinatedSensor):
@@ -490,8 +494,11 @@ class AbstractEcowattLevel(CoordinatorEntity, RestorableCoordinatedSensor):
         return self._state
 
     @property
-    def device_info(self):
-        return {"identifiers": {(DOMAIN, "RTE")}, "name": "RTE"}
+    def device_info(self) -> DeviceInfo:
+        return DeviceInfo(
+            identifiers={(DOMAIN, "RTE")},
+            name="RTE",
+        )
 
 
 class HourlyEcowattLevel(AbstractEcowattLevel):
