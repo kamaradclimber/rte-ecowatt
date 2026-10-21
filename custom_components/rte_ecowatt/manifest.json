@@ -1,6 +1,9 @@
 {
   "domain": "rte_ecowatt",
   "name": "My EcoWatt by RTE",
+  "categories": [
+    "energy"
+  ],
   "codeowners": [
     "@kamaradclimber"
   ],
@@ -10,5 +13,5 @@
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/kamaradclimber/rte-ecowatt/issues",
   "requirements": [],
-  "version": "0.10.1"
+  "version": "0.10.2"
 }
