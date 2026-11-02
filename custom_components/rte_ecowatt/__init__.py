@@ -5,7 +5,7 @@ import urllib.parse
 import logging
 from datetime import datetime, timedelta, tzinfo
 from zoneinfo import ZoneInfo
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from dateutil import tz
 from itertools import dropwhile, takewhile
 from oauthlib.oauth2 import BackendApplicationClient
@@ -198,13 +198,13 @@ class EcoWattAPICoordinator(DataUpdateCoordinator):
                 )
         return None
 
-    async def update_method(self):
+    async def update_method(self) -> List[Dict[str, Any]]:
         """Fetch data from API endpoint.
 
         This could be the place to pre-process the data to lookup tables
         so entities can quickly look up their data.
         """
-        body = None
+        body: Optional[str] = None
         loaded_from_cache = False
         try:
             previous_data = await self._custom_store.async_load()
@@ -216,12 +216,23 @@ class EcoWattAPICoordinator(DataUpdateCoordinator):
                     _LOGGER.info(
                         "Loading RTE ecowatt data from storage instead of querying api"
                     )
-                    body = previous_data["body"]
+                    cached_body = previous_data["body"]
+                    if not isinstance(cached_body, str):
+                        raise ValueError("Cached API body is not a string")
+                    body = cached_body
                     loaded_from_cache = True
         except Exception as e:
             _LOGGER.warn(f"Impossible to load previous data: {e}")
         if body is None:
             body = await self._real_update_method()
+            # None means reuse parsed coordinator data; it is not a cacheable body.
+            if body is None:
+                if self.data is not None:
+                    _LOGGER.info("Reusing previously fetched RTE ecowatt data")
+                    return self.data
+                raise UpdateFailed(
+                    "No RTE ecowatt data available while refresh is skipped"
+                )
             try:
                 await self._custom_store.async_save(
                     {
@@ -248,7 +259,7 @@ class EcoWattAPICoordinator(DataUpdateCoordinator):
         _LOGGER.debug(f"data parsed: {signals}")
         return signals
 
-    async def _real_update_method(self):
+    async def _real_update_method(self) -> Optional[str]:
         try:
             _LOGGER.debug(
                 f"Calling update method, {len(self._listeners)} listeners subscribed"
@@ -261,7 +272,7 @@ class EcoWattAPICoordinator(DataUpdateCoordinator):
 
             if self.skip_refresh():
                 _LOGGER.warning(f"Skipping data refresh because: {self.skip_refresh()}")
-                return self.data
+                return None
             client = await self.async_oauth_client()
             headers = {
                 "Authorization": f"{self.token['token_type']} {self.token['access_token']}"
@@ -282,7 +293,7 @@ class EcoWattAPICoordinator(DataUpdateCoordinator):
                     _LOGGER.warn(
                         "Error communicating with RTE API: requests too frequent. Using old data"
                     )
-                    return self.data
+                    return None
                 raise UpdateFailed(
                     f"Error communicating with RTE API: requests too frequent to RTE API"
                 )
